@@ -36,6 +36,7 @@ jobs:
           def read(p): return open(p, encoding='utf-8').read()
           def write(p, s): open(p, 'w', encoding='utf-8').write(s)
           def find(name, root=P): return glob.glob(f'{root}/**/{name}', recursive=True)
+          def allswift(): return glob.glob(f'{P}/**/*.swift', recursive=True)
 
           for n in ['AlwaysAllowedView.swift', 'AppLimitsView.swift', 'DowntimeView.swift', 'ScreenDistanceView.swift']:
               for p in find(n):
@@ -73,7 +74,7 @@ jobs:
                   else:
                       out.append(s[i:j + 1]); i = j + 1
               return ''.join(out), removed
-          for p in glob.glob(f'{P}/**/*.swift', recursive=True):
+          for p in allswift():
               s = read(p)
               if not re.search(r'developer', s, re.I): continue
               o = s
@@ -86,7 +87,16 @@ jobs:
               s = read(p)
               s = re.sub(r'ContentUnavailableView\("No Hidden Apps", systemImage: "eye.slash", description: Text\((".*?")\)\)',
                          r'ContentUnavailableView { Label("No Hidden Apps", systemImage: "eye.slash") } description: { Text(\1) }', s)
+              s = s.replace('withAnimation(.spring) { store.hiddenAppBundleIDs.remove(app.bundleID) }',
+                            'withAnimation(.spring()) { _ = store.hiddenAppBundleIDs.remove(app.bundleID) }')
               write(p, s); print('HiddenFolderTile patched')
+
+          for p in find('CategoryFolderTile.swift'):
+              s = read(p)
+              s = s.replace('withAnimation(.spring) {', 'withAnimation(.spring()) {')
+              s = s.replace('if isHidden { store.hiddenAppBundleIDs.remove(app.bundleID) } else { store.hiddenAppBundleIDs.insert(app.bundleID) }',
+                            'if isHidden { _ = store.hiddenAppBundleIDs.remove(app.bundleID) } else { _ = store.hiddenAppBundleIDs.insert(app.bundleID) }')
+              write(p, s); print('CategoryFolderTile patched')
 
           for p in find('BatteryDataProvider.swift'):
               s = read(p)
@@ -95,24 +105,32 @@ jobs:
               s = re.sub(r'private func screenOnMinutesToday.*\n', '', s)
               write(p, s); print('BatteryDataProvider patched')
 
+          # shortcut icon helper -> public API
           sym = 'UIApplicationShortcutIconHelper'
+          for p in allswift():
+              s = read(p)
+              if sym in s:
+                  write(p, s.replace(f'{sym}.icon(withSystemImageName:', 'UIApplicationShortcutIcon(systemImageName:')
+                            .replace(f'{sym}.icon(withTemplateImageName:', 'UIApplicationShortcutIcon(templateImageName:'))
           rx = re.compile(rf'(struct|enum|class)\s+{sym}\b')
-          defined = any(rx.search(read(p)) for p in glob.glob(f'{P}/**/*.swift', recursive=True))
-          if not defined and os.path.isdir(BK):
-              for b in glob.glob(f'{BK}/**/*.swift', recursive=True):
-                  if not rx.search(read(b)): continue
-                  rel, name = os.path.relpath(b, BK), os.path.basename(b)
-                  if name == 'AppIconView.swift':
-                      for f in glob.glob(f'{P}/**/*.swift', recursive=True):
-                          t = read(f)
-                          if 'AppIconView(app:' in t or 'struct AppIconView' in t:
-                              write(f, re.sub(r'\bAppIconView\b', 'MockAppIconView', t))
-                      for f in find('AppIconView.swift'):
-                          os.rename(f, os.path.join(os.path.dirname(f), 'MockAppIconView.swift'))
-                      print('generated AppIconView renamed')
-                  os.makedirs(os.path.dirname(rel), exist_ok=True)
-                  shutil.copy2(b, rel); print('restored', rel)
-                  break
+          if any(sym in read(p) for p in allswift()) and not any(rx.search(read(p)) for p in allswift()):
+              write(f'{P}/ShortcutIconHelper.swift',
+                    'import UIKit\n\nenum UIApplicationShortcutIconHelper {\n'
+                    '    static func icon(withSystemImageName name: String) -> UIApplicationShortcutIcon { UIApplicationShortcutIcon(systemImageName: name) }\n}\n')
+              print('helper enum written')
+
+          # SettingsGroup: avoid Identifiable requirement
+          for p in find('SettingsGroup.swift'):
+              s = read(p)
+              s = re.sub(r'ForEach\(group\)\s*\{\s*(\w+)\s+in', r'ForEach(Array(group.enumerated()), id: \\.offset) { _, \1 in', s)
+              write(p, s); print('SettingsGroup patched')
+
+          # fallback for string-catalog symbols
+          for p in allswift():
+              s = read(p); o = s
+              s = s.replace('Button(.done)', 'Button("Done")').replace('Button(.ok)', 'Button("OK")').replace('Button(.cancel)', 'Button("Cancel")')
+              s = s.replace('.alert(.connectToTheInternetToSignInToYourDevice,', '.alert("Connect to the Internet to sign in to your device.",')
+              if s != o: write(p, s); print('string symbols replaced in', p)
 
           for f in glob.glob(f'{P}/**/*App.swift', recursive=True):
               s = read(f)
@@ -159,6 +177,7 @@ jobs:
               "TARGETED_DEVICE_FAMILY": "1,2",
               "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
               "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "AccentColor",
+              "STRING_CATALOG_GENERATE_SYMBOLS": "YES",
               "SWIFT_COMPILATION_MODE": "wholemodule",
               **info,
           }
