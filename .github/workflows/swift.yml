@@ -1,0 +1,59 @@
+name: Build unsigned IPA
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15          # Xcode 16.x ؛ اگر Xcode 26 لازم داشتی: macos-26 (وقتی در دسترس شد)
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          ls /Applications | grep Xcode
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_16*.app | sort -V | tail -1)/Contents/Developer"
+          xcodebuild -version
+
+      - name: Detect project & scheme
+        id: detect
+        run: |
+          PROJ=$(ls -d *.xcodeproj | head -1)
+          SCHEME=$(xcodebuild -list -project "$PROJ" -json | python3 -c "import sys,json; print(json.load(sys.stdin)['project']['schemes'][0])")
+          echo "project=$PROJ" >> $GITHUB_OUTPUT
+          echo "scheme=$SCHEME" >> $GITHUB_OUTPUT
+          echo "Project: $PROJ  Scheme: $SCHEME"
+
+      - name: Build (no code signing)
+        run: |
+          xcodebuild \
+            -project "${{ steps.detect.outputs.project }}" \
+            -scheme "${{ steps.detect.outputs.scheme }}" \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM="" \
+            IPHONEOS_DEPLOYMENT_TARGET=18.0 \
+            clean build | xcpretty && exit ${PIPESTATUS[0]}
+
+      - name: Package .ipa
+        run: |
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qry "Settings-iOS-unsigned.ipa" Payload
+          ls -lh *.ipa
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Settings-iOS-unsigned-ipa
+          path: Settings-iOS-unsigned.ipa
