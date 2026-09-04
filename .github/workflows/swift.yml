@@ -31,7 +31,7 @@ jobs:
           python3 - "$SET/icon.png" <<'PY'
           import sys, zlib, struct
           w = h = 1024
-          row = b'\x00' + bytes([142, 142, 147]) * w          # RGB, no alpha
+          row = b'\x00' + bytes([142, 142, 147]) * w
           raw = row * h
           def chunk(t, d):
               return struct.pack('>I', len(d)) + t + d + struct.pack('>I', zlib.crc32(t + d) & 0xffffffff)
@@ -49,7 +49,62 @@ jobs:
             "info" : { "author" : "xcode", "version" : 1 }
           }
           JSON
-          echo "Fallback icon written to $SET"
+
+      - name: Register new Swift files in the Xcode project
+        run: |
+          sudo gem install xcodeproj --no-document -q
+          ruby - <<'RUBY'
+          require 'xcodeproj'
+          require 'pathname'
+
+          proj_path = Dir['*.xcodeproj'].first or abort 'no .xcodeproj found'
+          project   = Xcodeproj::Project.open(proj_path)
+          target    = project.targets.find { |t| t.product_type == 'com.apple.product-type.application' } or abort 'no app target'
+          root      = Pathname.new(Dir.pwd)
+
+          if project.main_group.children.any? { |c| c.isa == 'PBXFileSystemSynchronizedRootGroup' }
+            puts 'project uses synchronized folders - nothing to register'
+            exit 0
+          end
+
+          phase = target.source_build_phase
+
+          # 1) drop references to Swift files that no longer exist on disk (e.g. deleted Developer views)
+          phase.files.dup.each do |bf|
+            ref  = bf.file_ref or next
+            path = (ref.real_path rescue nil) or next
+            next if path.exist?
+            puts "- removed missing reference: #{path.relative_path_from(root)}"
+            phase.remove_build_file(bf)
+            ref.remove_from_project
+          end
+
+          # 2) find the app source folder (the one containing *App.swift)
+          app_file = Dir.glob('**/*App.swift').reject { |f| f.start_with?('build/', '_ios26_backup/') }.first or abort 'no *App.swift'
+          src_dir  = File.dirname(app_file)
+          puts "source folder: #{src_dir}"
+
+          existing = phase.files.map { |bf| (bf.file_ref.real_path.to_s rescue nil) }.compact
+          group    = project.main_group.find_subpath('iOS26 Generated', true)
+
+          added = 0
+          Dir.glob("#{src_dir}/**/*.swift").sort.each do |rel|
+            next if rel.include?('Preview Content')
+            abs = (root + rel).to_s
+            next if existing.include?(abs)
+            ref = group.new_reference(abs)
+            target.add_file_references([ref])
+            puts "+ added: #{rel}"
+            added += 1
+          end
+
+          # 3) warn about duplicate basenames (would cause 'invalid redeclaration')
+          names = phase.files.map { |bf| bf.file_ref&.path.to_s.split('/').last }.compact
+          names.group_by { |n| n }.select { |_, v| v.size > 1 }.each_key { |n| puts "!! DUPLICATE in target: #{n}" }
+
+          project.save
+          puts "registered #{added} new files"
+          RUBY
 
       - name: Detect project & scheme
         id: detect
@@ -58,14 +113,11 @@ jobs:
           SCHEME=$(xcodebuild -list -project "$PROJ" -json | python3 -c "import sys,json; print(json.load(sys.stdin)['project']['schemes'][0])")
           echo "project=$PROJ" >> $GITHUB_OUTPUT
           echo "scheme=$SCHEME" >> $GITHUB_OUTPUT
-          echo "Project: $PROJ  Scheme: $SCHEME"
 
       - name: Build (no code signing)
         run: |
           EXTRA=""
-          if [ "${{ steps.xcode.outputs.is26 }}" = "false" ]; then
-            EXTRA="ASSETCATALOG_COMPILER_APPICON_NAME=AppIcon"
-          fi
+          [ "${{ steps.xcode.outputs.is26 }}" = "false" ] && EXTRA="ASSETCATALOG_COMPILER_APPICON_NAME=AppIcon"
           set -o pipefail
           xcodebuild \
             -project "${{ steps.detect.outputs.project }}" \
@@ -79,7 +131,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             DEVELOPMENT_TEAM="" \
             $EXTRA \
-            clean build 2>&1 | tee build.log | grep -E "error:|warning: .*deprecated|BUILD" || true
+            clean build 2>&1 | tee build.log | grep -E "error:|BUILD" || true
           grep -q "BUILD SUCCEEDED" build.log
 
       - name: Upload build log on failure
@@ -92,8 +144,7 @@ jobs:
       - name: Package .ipa
         run: |
           APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
-          mkdir -p Payload
-          cp -R "$APP" Payload/
+          mkdir -p Payload && cp -R "$APP" Payload/
           zip -qry "Settings-iOS-unsigned.ipa" Payload
           ls -lh *.ipa
 
