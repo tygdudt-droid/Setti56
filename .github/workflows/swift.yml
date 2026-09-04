@@ -26,17 +26,25 @@ jobs:
       - name: Generate iOS 26 sources
         run: |
           test -f generate_ios26.py || exit 1
+          test -f generate_ios26_part2.py || { echo "generate_ios26_part2.py missing"; exit 1; }
           python3 generate_ios26.py --repo .
+          python3 generate_ios26_part2.py --repo .
 
       - name: Post generation fixes
         run: |
           python3 - <<'PY'
-          import os, re, glob, shutil
-          P, BK = 'Preferences', '_ios26_backup'
+          import os, re, glob
+          P = 'Preferences'
           def read(p): return open(p, encoding='utf-8').read()
           def write(p, s): open(p, 'w', encoding='utf-8').write(s)
           def find(name, root=P): return glob.glob(f'{root}/**/{name}', recursive=True)
           def allswift(): return glob.glob(f'{P}/**/*.swift', recursive=True)
+          def stub(path, target, keep=()):
+              s = read(path)
+              names = [n for n in re.findall(r'struct\s+(\w+)\s*:\s*View', s) if n not in keep]
+              if not names: return
+              body = 'import SwiftUI\n\n' + ''.join(f'struct {n}: View {{\n    var body: some View {{ {target} }}\n}}\n\n' for n in names)
+              write(path, body); print(f'routed {os.path.basename(path)} {names} -> {target}')
 
           for n in ['AlwaysAllowedView.swift', 'AppLimitsView.swift', 'DowntimeView.swift', 'ScreenDistanceView.swift']:
               for p in find(n):
@@ -50,6 +58,19 @@ jobs:
           for p in find('NetworkView.swift'):
               write(p, 'import SwiftUI\n\nstruct NetworkView: View {\n    var body: some View { WiFiView() }\n}\n')
               print('NetworkView routed to WiFiView')
+
+          # original storage screens -> DeviceStorageView (crash fix)
+          for p in allswift():
+              b = os.path.basename(p).lower()
+              if 'storage' in b and 'icloud' not in b and b != 'devicestorageview.swift':
+                  stub(p, 'DeviceStorageView()')
+
+          # original analytics screens -> new ones
+          mine = {'AnalyticsDataView.swift', 'AnalyticsImprovementsView.swift', 'AnalyticsStore.swift', 'AnalyticsFileTemplates.swift'}
+          for p in allswift():
+              b = os.path.basename(p)
+              if 'Analytics' in b and b not in mine:
+                  stub(p, 'AnalyticsDataView()' if 'data' in b.lower() else 'AnalyticsImprovementsView()')
 
           def strip_developer_items(s):
               pat = re.compile(r'\b\w*Item\s*\(')
@@ -136,15 +157,13 @@ jobs:
           PY
           rm -rf _ios26_backup
 
-      - name: Provide AppIcon (custom AppIcon.png in repo root, else rendered gear icon)
+      - name: Provide AppIcon
         run: |
           CATALOG=$(find Preferences -name "Assets.xcassets" -not -path "*Preview*" | head -1)
-          echo "asset catalog: $CATALOG"
           SET="$CATALOG/AppIcon.appiconset"
           mkdir -p "$SET"
           if [ -f AppIcon.png ]; then
             sips -s format png -z 1024 1024 AppIcon.png --out "$SET/icon.png" >/dev/null
-            echo "using custom AppIcon.png"
           else
             cat > /tmp/icon.swift <<'SWIFT'
           import AppKit
@@ -171,19 +190,15 @@ jobs:
           NSGraphicsContext.restoreGraphicsState()
           try! rep.representation(using: .png, properties: [:])!.write(to: URL(fileURLWithPath: out))
           SWIFT
-            swift /tmp/icon.swift "$SET/icon.png" && echo "rendered gear icon" || {
-              echo "render failed, using flat gray"
-              python3 - "$SET/icon.png" <<'PY'
+            swift /tmp/icon.swift "$SET/icon.png" || python3 - "$SET/icon.png" <<'PY'
           import sys, zlib, struct
           w = h = 1024
           raw = (b'\x00' + bytes([142,142,147])*w) * h
           def chunk(t, d): return struct.pack('>I', len(d)) + t + d + struct.pack('>I', zlib.crc32(t+d) & 0xffffffff)
           open(sys.argv[1],'wb').write(b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0)) + chunk(b'IDAT', zlib.compress(raw, 9)) + chunk(b'IEND', b''))
           PY
-            }
           fi
           printf '{"images":[{"filename":"icon.png","idiom":"universal","platform":"ios","size":"1024x1024"}],"info":{"author":"xcode","version":1}}' > "$SET/Contents.json"
-          ls -la "$SET"
 
       - name: Generate Xcode project
         run: |
@@ -191,19 +206,6 @@ jobs:
           rm -rf *.xcodeproj
           python3 - <<'PY'
           import os
-          if os.path.exists("Preferences/Info.plist"):
-              info = {"INFOPLIST_FILE": "Preferences/Info.plist"}
-          else:
-              info = {
-                  "GENERATE_INFOPLIST_FILE": "YES",
-                  "INFOPLIST_KEY_CFBundleDisplayName": "Settings",
-                  "INFOPLIST_KEY_UILaunchScreen_Generation": "YES",
-                  "INFOPLIST_KEY_UIApplicationSceneManifest_Generation": "YES",
-                  "INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents": "YES",
-                  "INFOPLIST_KEY_UISupportedInterfaceOrientations": "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight",
-                  "INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad": "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight",
-                  "INFOPLIST_KEY_NSFaceIDUsageDescription": "Settings uses Face ID to unlock hidden apps.",
-              }
           settings = {
               "PRODUCT_BUNDLE_IDENTIFIER": "com.mock.settings",
               "PRODUCT_NAME": "Settings",
@@ -215,8 +217,17 @@ jobs:
               "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "AccentColor",
               "STRING_CATALOG_GENERATE_SYMBOLS": "YES",
               "SWIFT_COMPILATION_MODE": "wholemodule",
-              **info,
+              "GENERATE_INFOPLIST_FILE": "YES",
+              "INFOPLIST_KEY_CFBundleDisplayName": "Settings",
+              "INFOPLIST_KEY_UILaunchScreen_Generation": "YES",
+              "INFOPLIST_KEY_UIApplicationSceneManifest_Generation": "YES",
+              "INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents": "YES",
+              "INFOPLIST_KEY_UISupportedInterfaceOrientations": "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight",
+              "INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad": "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight",
+              "INFOPLIST_KEY_NSFaceIDUsageDescription": "Settings uses Face ID to unlock hidden apps and show Wi-Fi passwords.",
           }
+          if os.path.exists("Preferences/Info.plist"):
+              settings["INFOPLIST_FILE"] = "Preferences/Info.plist"
           lines = [
               "name: Settings-iOS",
               "options:",
@@ -234,6 +245,7 @@ jobs:
               '          - "Preview Content/**"',
               '          - "*.md"',
               '          - "**/*.icon"',
+              '          - "Info.plist"',
               "    settings:",
               "      base:",
           ]
@@ -243,10 +255,8 @@ jobs:
           PY
           xcodegen generate
           PBX=Settings-iOS.xcodeproj/project.pbxproj
-          echo "swift files on disk : $(find Preferences -name '*.swift' -not -path '*Preview*' | wc -l | tr -d ' ')"
+          echo "swift files on disk  : $(find Preferences -name '*.swift' -not -path '*Preview*' | wc -l | tr -d ' ')"
           echo "swift files in target: $(grep -c '\.swift in Sources' $PBX)"
-          echo "asset catalogs in target: $(grep -c '\.xcassets in Resources' $PBX)"
-          echo "string catalogs in target: $(grep -c '\.xcstrings in Resources' $PBX)"
 
       - name: Build
         run: |
@@ -264,24 +274,30 @@ jobs:
           name: build-log
           path: build.log
 
-      - name: Verify bundle
+      - name: Verify and repair bundle
         run: |
           APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
-          echo "App bundle: $APP"
-          echo "Total size: $(du -sh "$APP" | cut -f1)"
-          echo "--- contents ---"
-          ls -la "$APP"
-          echo "--- localizations: $(find "$APP" -name '*.lproj' | wc -l | tr -d ' ')"
-          echo "--- Info.plist ---"
-          plutil -p "$APP/Info.plist" | grep -E "CFBundleDisplayName|CFBundleIdentifier|MinimumOSVersion|CFBundleIcons|UIDeviceFamily" || true
-          test -f "$APP/Assets.car" || { echo "::error::Assets.car missing - asset catalog was NOT compiled"; exit 1; }
-          echo "Assets.car size: $(du -sh "$APP/Assets.car" | cut -f1)"
-          ls "$APP" | grep -i "AppIcon" || echo "::warning::no AppIcon*.png in bundle"
+          PL="$APP/Info.plist"
+          PB=/usr/libexec/PlistBuddy
+          set_if_missing() { $PB -c "Print :$1" "$PL" >/dev/null 2>&1 || $PB -c "Add :$1 $2 $3" "$PL"; }
+          set_if_missing CFBundleIdentifier string com.mock.settings
+          set_if_missing CFBundleDisplayName string Settings
+          set_if_missing CFBundleShortVersionString string 26.0
+          set_if_missing CFBundleVersion string 1
+          set_if_missing MinimumOSVersion string 26.0
+          if ! $PB -c "Print :CFBundleIcons" "$PL" >/dev/null 2>&1 && ls "$APP" | grep -q '^AppIcon60x60@2x\.png$'; then
+            $PB -c "Add :CFBundleIcons dict" -c "Add :CFBundleIcons:CFBundlePrimaryIcon dict" \
+                -c "Add :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconFiles array" \
+                -c "Add :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconFiles:0 string AppIcon60x60" \
+                -c "Add :CFBundleIcons:CFBundlePrimaryIcon:CFBundleIconName string AppIcon" "$PL"
+          fi
+          plutil -p "$PL" | grep -E "CFBundleIdentifier|CFBundleShortVersionString|CFBundleIcons" || true
+          test -f "$APP/Assets.car" || { echo "Assets.car missing"; exit 1; }
 
       - name: Package IPA
         run: |
           APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
-          mkdir -p Payload && cp -R "$APP" Payload/
+          rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
           zip -qry Settings-iOS-unsigned.ipa Payload && ls -lh *.ipa
 
       - name: Upload IPA
