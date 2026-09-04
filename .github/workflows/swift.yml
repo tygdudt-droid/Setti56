@@ -15,7 +15,235 @@ jobs:
 
       - name: Select Xcode
         id: xcode
+        run: |name: Build unsigned IPA
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode 26 (required by the original project)
         run: |
+          ls /Applications | grep -i xcode || true
+          XC=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XC" ]; then
+            echo "::error::Xcode 26 not found on this runner. Keep runs-on: macos-26 (or macos-latest) - the project uses iOS 26 APIs."
+            exit 1
+          fi
+          sudo xcode-select -s "$XC/Contents/Developer"
+          xcodebuild -version
+
+      - name: Generate iOS 26 sources
+        run: |
+          test -f generate_ios26.py || { echo "::error::generate_ios26.py missing in repo root"; exit 1; }
+          python3 generate_ios26.py --repo .
+
+      - name: Post-generation fixes
+        run: |
+          python3 - <<'PY'
+          import os, re, glob, shutil
+          P, BK = 'Preferences', '_ios26_backup'
+          def read(p): return open(p, encoding='utf-8').read()
+          def write(p, s): open(p, 'w', encoding='utf-8').write(s)
+          def find(name, root=P): return glob.glob(f'{root}/**/{name}', recursive=True)
+
+          # 1) original Screen Time sub-views are superseded by ScreenTimeSubViews.swift
+          for n in ['AlwaysAllowedView.swift', 'AppLimitsView.swift', 'DowntimeView.swift', 'ScreenDistanceView.swift']:
+              for p in find(n):
+                  os.remove(p); print('removed superseded', p)
+
+          # 2) MGHelper needs Foundation/Darwin imports on a clean project
+          for p in find('MGHelper.swift'):
+              s = read(p)
+              if not re.search(r'^import Foundation', s, re.M):
+                  write(p, 'import Foundation\nimport Darwin\n' + s); print('MGHelper: imports added')
+
+          # 3) the root list pushes NetworkView -> route it to the functional WiFiView
+          for p in find('NetworkView.swift'):
+              write(p, 'import SwiftUI\n\n/// Original Wi-Fi screen, now backed by the functional WiFiView.\nstruct NetworkView: View {\n    var body: some View { WiFiView() }\n}\n')
+              print('NetworkView -> WiFiView')
+
+          # 4) remove Developer Mode entries everywhere
+          def strip_developer_items(s):
+              pat = re.compile(r'\b\w*Item\s*\(')
+              out, i, removed = [], 0, 0
+              while True:
+                  m = pat.search(s, i)
+                  if not m:
+                      out.append(s[i:]); break
+                  depth, j = 0, m.end() - 1
+                  while j < len(s):
+                      if s[j] == '(': depth += 1
+                      elif s[j] == ')':
+                          depth -= 1
+                          if depth == 0: break
+                      j += 1
+                  span = s[m.start():j + 1]
+                  if re.search(r'developer', span, re.I) and not re.search(r'app developer', span, re.I):
+                      k = j + 1
+                      while k < len(s) and s[k] in ' \t': k += 1
+                      if k < len(s) and s[k] == ',': k += 1
+                      out.append(s[i:m.start()]); i = k; removed += 1
+                  else:
+                      out.append(s[i:j + 1]); i = j + 1
+              return ''.join(out), removed
+          for p in glob.glob(f'{P}/**/*.swift', recursive=True):
+              s = read(p)
+              if not re.search(r'developer', s, re.I): continue
+              o = s
+              s = s.replace('AccessoryDeveloperView()', 'EmptyView()').replace('DeveloperView()', 'EmptyView()')
+              s, n = strip_developer_items(s)
+              if s != o:
+                  write(p, s); print(f'Developer refs cleaned: {p} (items removed: {n})')
+
+          # 5) my bug: ambiguous ContentUnavailableView init
+          for p in find('HiddenFolderTile.swift'):
+              s = read(p)
+              s = re.sub(r'ContentUnavailableView\("No Hidden Apps", systemImage: "eye.slash", description: Text\((".*?")\)\)',
+                         r'ContentUnavailableView { Label("No Hidden Apps", systemImage: "eye.slash") } description: { Text(\1) }', s)
+              write(p, s); print('HiddenFolderTile patched')
+
+          # 6) my bug: helper name clash in BatteryDataProvider
+          for p in find('BatteryDataProvider.swift'):
+              s = read(p)
+              s = s.replace('screenOnMinutesToday(&rng),', 'screenOnMinutes: Int.random(in: 120...420, using: &rng),')
+              s = re.sub(r'private extension BatteryDay \{.*?\n\}\n', '', s, flags=re.S)
+              s = re.sub(r'private func screenOnMinutesToday.*\n', '', s)
+              write(p, s); print('BatteryDataProvider patched')
+
+          # 7) restore any original file that defines UIApplicationShortcutIconHelper (used by PreferencesApp)
+          sym = 'UIApplicationShortcutIconHelper'
+          rx = re.compile(rf'(struct|enum|class)\s+{sym}\b')
+          defined = any(rx.search(read(p)) for p in glob.glob(f'{P}/**/*.swift', recursive=True))
+          if not defined and os.path.isdir(BK):
+              for b in glob.glob(f'{BK}/**/*.swift', recursive=True):
+                  if not rx.search(read(b)): continue
+                  rel, name = os.path.relpath(b, BK), os.path.basename(b)
+                  if name == 'AppIconView.swift':
+                      for f in glob.glob(f'{P}/**/*.swift', recursive=True):
+                          t = read(f)
+                          if 'AppIconView(app:' in t or 'struct AppIconView' in t:
+                              write(f, re.sub(r'\bAppIconView\b', 'MockAppIconView', t))
+                      for f in find('AppIconView.swift'):
+                          os.rename(f, os.path.join(os.path.dirname(f), 'MockAppIconView.swift'))
+                      print('generated AppIconView renamed to MockAppIconView')
+                  elif find(name):
+                      print(f'::warning::{sym} is in {rel}, which clashes with a generated file')
+                  os.makedirs(os.path.dirname(rel), exist_ok=True)
+                  shutil.copy2(b, rel); print(f'restored {rel} ({sym})')
+                  break
+
+          # 8) inject SettingsStore into the App entry point
+          for f in glob.glob(f'{P}/**/*App.swift', recursive=True):
+              s = read(f)
+              if 'SettingsStore.shared' not in s:
+                  write(f, re.sub(r'(ContentView\(\))', r'\1.environment(SettingsStore.shared)', s, count=1)); print('store wired in', f)
+          PY
+          rm -rf _ios26_backup
+
+      - name: Provide AppIcon (Icon Composer .icon needs Xcode project support)
+        run: |
+          SET="Preferences/Assets.xcassets/AppIcon.appiconset"
+          mkdir -p "$SET"
+          python3 - "$SET/icon.png" <<'PY'
+          import sys, zlib, struct
+          w = h = 1024
+          raw = (b'\x00' + bytes([142,142,147])*w) * h
+          def chunk(t, d): return struct.pack('>I', len(d)) + t + d + struct.pack('>I', zlib.crc32(t+d) & 0xffffffff)
+          open(sys.argv[1],'wb').write(b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0)) + chunk(b'IDAT', zlib.compress(raw, 9)) + chunk(b'IEND', b''))
+          PY
+          printf '{"images":[{"filename":"icon.png","idiom":"universal","platform":"ios","size":"1024x1024"}],"info":{"author":"xcode","version":1}}' > "$SET/Contents.json"
+
+      - name: Generate Xcode project with XcodeGen
+        run: |
+          brew install xcodegen
+          rm -rf *.xcodeproj
+          python3 - <<'PY'
+          import os
+          if os.path.exists("Preferences/Info.plist"):
+              info = {"INFOPLIST_FILE": "Preferences/Info.plist"}
+          else:
+              info = {
+                  "GENERATE_INFOPLIST_FILE": "YES",
+                  "INFOPLIST_KEY_UILaunchScreen_Generation": "YES",
+                  "INFOPLIST_KEY_UIApplicationSceneManifest_Generation": "YES",
+                  "INFOPLIST_KEY_UISupportedInterfaceOrientations": "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight",
+                  "INFOPLIST_KEY_NSFaceIDUsageDescription": "Settings uses Face ID to unlock hidden apps.",
+              }
+          settings = {
+              "PRODUCT_BUNDLE_IDENTIFIER": "com.mock.settings",
+              "PRODUCT_NAME": "Settings",
+              "MARKETING_VERSION": "26.0",
+              "CURRENT_PROJECT_VERSION": "1",
+              "SWIFT_VERSION": "5.0",
+              "TARGETED_DEVICE_FAMILY": "1,2",
+              "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
+              "ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "AccentColor",
+              "SWIFT_COMPILATION_MODE": "wholemodule",
+              **info,
+          }
+          lines = [
+              "name: Settings-iOS",
+              "options:",
+              "  bundleIdPrefix: com.mock",
+              "  deploymentTarget:",
+              '    iOS: "26.0"',
+              "  createIntermediateGroups: true",
+              "targets:",
+              "  Preferences:",
+              "    type: application",
+              "    platform: iOS",
+              "    sources:",
+              "      - path: Preferences",
+              "        excludes:",
+              '          - "Preview Content/**"',
+              '          - "*.md"',
+              '          - "**/*.icon"',
+              "    settings:",
+              "      base:",
+          ]
+          for k, v in settings.items():
+              lines.append(f'        {k}: "{v}"')
+          open("project.yml", "w").write("\n".join(lines) + "\n")
+          PY
+          xcodegen generate
+          echo "swift files in target: $(grep -c '\.swift in Sources' Settings-iOS.xcodeproj/project.pbxproj)"
+
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild -project Settings-iOS.xcodeproj -scheme Preferences -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO DEVELOPMENT_TEAM="" \
+            clean build 2>&1 | tee build.log | grep -E "error:|BUILD" || true
+          grep -q "BUILD SUCCEEDED" build.log
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+
+      - name: Package IPA
+        run: |
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
+          mkdir -p Payload && cp -R "$APP" Payload/
+          zip -qry Settings-iOS-unsigned.ipa Payload && ls -lh *.ipa
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Settings-iOS-unsigned-ipa
+          path: Settings-iOS-unsigned.ipa
           XC=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
           [ -z "$XC" ] && XC=$(ls -d /Applications/Xcode_16*.app | sort -V | tail -1)
           sudo xcode-select -s "$XC/Contents/Developer"
