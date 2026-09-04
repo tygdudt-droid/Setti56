@@ -1,125 +1,41 @@
-//
-//  OtherNetworkView.swift
-//  Preferences
-//
-
 import SwiftUI
 
-/// View for Settings > Wi-Fi > Other…
 struct OtherNetworkView: View {
     @Environment(\.dismiss) private var dismiss
-    @FocusState private var networkFocused: Bool
-    @State private var animatingSymbol = true
-    @State private var networkName = ""
-    @State private var security = "kWFLocSecurityWPA2WPA3Title"
-    @State private var username = ""
+    @State private var name = ""
+    @State private var security = "WPA2/WPA3"
     @State private var password = ""
-    @State var status = "kWFLocOtherNetworksPrompt"
-    @State private var frameY = 100.0
-    let path = "/System/Library/PrivateFrameworks/WiFiKitUI.framework"
-    let table = "WiFiKitUILocalizableStrings"
+    @State private var joining = false
 
     var body: some View {
-        NavigationStack {
-            List {
-                // Wi-Fi symbol
-                Image(systemName: "wifi")
-                    .font(.system(size: 64))
-                    .foregroundStyle(.blue.gradient)
-                    .symbolEffect(.drawOn, isActive: animatingSymbol)
-                    .onAppear {
+        List {
+            Section("Name") { TextField("Network Name", text: $name) }
+            Section("Security") {
+                Picker("Security", selection: $security) {
+                    ForEach(["None", "WEP", "WPA", "WPA2/WPA3", "WPA3", "WPA2 Enterprise"], id: \.self) { Text($0) }
+                }
+            }
+            if security != "None" {
+                Section("Password") { SecureField("Password", text: $password) }
+            }
+        }
+        .navigationTitle("Other Network")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                if joining { ProgressView() } else {
+                    Button("Join") {
+                        joining = true
                         Task {
-                            try await Task.sleep(for: .seconds(0.5))
-                            animatingSymbol = false
+                            let net = MockWiFiNetwork(ssid: name, security: security == "None" ? .none : .wpa2, signal: 2, isHotspot: false)
+                            try? await WiFiEngine.shared.join(net, password: security == "None" ? nil : password)
+                            joining = false
+                            dismiss()
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .listRowBackground(Color.clear)
-
-                // Join Wi-Fi Network
-                Section {
-                    Text("kWFLocOtherNetworksTitleOBK".localized(path: path, table: table))
-                        .padding(.horizontal, -15)
-                        .font(.title3)
-                        .fontWeight(.bold)
-                        .opacity(frameY >= 100.0 ? 1.0 : 0.0)
-                        .overlay {
-                            GeometryReader { geo in
-                                Color.clear
-                                    .onChange(of: geo.frame(in: .scrollView).minY) {
-                                        withAnimation {
-                                            frameY = geo.frame(in: .scrollView).minY
-                                        }
-                                    }
-                            }
-                        }
-                }
-                .listRowBackground(Color.clear)
-
-                // Name
-                Section {
-                    HStack {
-                        Text("kWFLocOtherNetworkNameTitle".localized(path: path, table: table))
-                        TextField("kWFLocOtherNetworkNamePlaceholder".localized(path: path, table: table), text: $networkName)
-                            .focused($networkFocused)
-                            .padding(.leading, 10)
-                            .onAppear {
-                                networkFocused = true
-                            }
-                    }
-                }
-                
-                // Security + Password/Username
-                Section {
-                    SLink(
-                        "kWFLocOtherNetworkSecurityTitle".localized(path: path, table: table),
-                        status: security.localized(path: path, table: table),
-                        destination: SecurityView(security: $security)
-                    )
-                    if security.contains("Enterprise") {
-                        HStack {
-                            Text("kWFLocOtherNetworkUsernameTitle".localized(path: path, table: table))
-                            TextField("", text: $username)
-                                .padding(.leading, 10)
-                        }
-                    }
-                    if security != "kWFLocSecurityNoneTitle" {
-                        HStack {
-                            Text("kWFLocOtherNetworkPasswordTitle".localized(path: path, table: table))
-                            SecureField("", text: $password)
-                                .padding(.leading, 10)
-                        }
-                    }
-                }
-            }
-            .contentMargins(30, for: .scrollContent)
-            .navigationTitle(frameY < 100.0 ? "kWFLocOtherNetworksTitleOBK".localized(path: path, table: table) : "")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(for: String.self) { key in
-                RouteRegistry.shared.view(for: key)
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    // Cancel
-                    Button(role: .cancel) {
-                        dismiss()
-                    }
-                    .labelStyle(.iconOnly)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    // Join
-                    Button(role: .confirm) {
-                        dismiss()
-                    }
-                    .disabled(security != "kWFLocSecurityNoneTitle" && (networkName.count < 1 || (password.count < 8 && username.isEmpty) || username.count < 1 && password.count < 1))
+                    .disabled(name.isEmpty || (security != "None" && password.count < 8))
                 }
             }
         }
-    }
-}
-
-#Preview {
-    NavigationStack {
-        OtherNetworkView()
     }
 }
