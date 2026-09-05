@@ -12,6 +12,7 @@ struct AboutView: View {
     @AppStorage("DeviceName") private var storedDeviceName = UIDevice.current.name
     @State private var showingRegulatoryModel = false
     @State private var availableStorage = "…"
+    @State private var showMockConfig = false
     private let device = MockDevice.current
     private let identity = MockDeviceIdentity.stored
     private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
@@ -36,9 +37,9 @@ struct AboutView: View {
                         title: "\(device.systemName) Version"
                     )
                 } label: {
-                    LabeledContent("\(device.systemName) Version", value: device.systemVersion)
+                    LabeledContent("\(device.systemName) Version", value: identity.osVersion ?? device.systemVersion)
                 }
-                LabeledContent("Model Name", value: device.modelName)
+                LabeledContent("Model Name", value: identity.modelName ?? device.modelName)
                     .textSelection(.enabled)
                 LabeledContent("Model Number", value: showingRegulatoryModel ? identity.regulatoryModel : identity.modelNumber)
                     .textSelection(.enabled)
@@ -49,6 +50,9 @@ struct AboutView: View {
                     .contextMenu {
                         Button("Copy", systemImage: "doc.on.doc") {
                             UIPasteboard.general.string = identity.serialNumber
+                        }
+                        Button("Mock Configuration…", systemImage: "wrench.and.screwdriver") {
+                            showMockConfig = true
                         }
                     }
             }
@@ -68,8 +72,8 @@ struct AboutView: View {
                 LabeledContent("Videos", value: "357")
                 LabeledContent("Photos", value: "2,126")
                 LabeledContent("Applications", value: "\(MockAppCatalog.all.count)")
-                LabeledContent("Capacity", value: "256 GB")
-                LabeledContent("Available", value: availableStorage)
+                LabeledContent("Capacity", value: identity.capacity ?? "256 GB")
+                LabeledContent("Available", value: identity.available ?? availableStorage)
             }
 
             // MARK: Network addresses
@@ -111,6 +115,9 @@ struct AboutView: View {
         }
         .task {
             availableStorage = getAvailableStorage() ?? "—"
+        }
+        .navigationDestination(isPresented: $showMockConfig) {
+            MockConfigView()
         }
     }
 

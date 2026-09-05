@@ -12,12 +12,14 @@ struct AirDropView: View {
     @AppStorage("AirDropNearbySharing") private var nearbySharingEnabled = true
     @AppStorage("AirDropCellularUsage") private var cellularUsageEnabled = true
     @State private var showingSheet = false
+    @State private var showMockConfig = false
     let options = ["Receiving Off", "Contacts Only", "Everyone for 10 Minutes"]
     let path = "/System/Library/PreferenceBundles/AirDropSettings.bundle"
 
     var body: some View {
         CustomList(title: "AirDrop".localized(path: path)) {
-            // AirDrop Visibility — tap-to-select rows with checkmark
+            // AirDrop Visibility — tap-to-select rows with checkmark.
+            // Hidden panel: long-press any option to open Mock Configuration.
             Section {
                 ForEach(options, id: \.self) { option in
                     Button {
@@ -33,6 +35,9 @@ struct AirDropView: View {
                             }
                         }
                     }
+                    .simultaneousGesture(
+                        LongPressGesture(minimumDuration: 0.5).onEnded { _ in showMockConfig = true }
+                    )
                 }
             } footer: {
                 Text(.init("AirDrop Learn More Footer WIFI".localized(path: path).replacing("airDropSettingsOBK", with: "pref")))
@@ -70,6 +75,9 @@ struct AirDropView: View {
             if url.absoluteString == "pref://" {
                 showingSheet = true
             }
+        }
+        .navigationDestination(isPresented: $showMockConfig) {
+            MockConfigView()
         }
         .sheet(isPresented: $showingSheet) {
             OBPrivacySplashController(bundleID: "com.apple.onboarding.airdrop")

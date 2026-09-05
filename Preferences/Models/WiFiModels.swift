@@ -3,12 +3,16 @@ import Observation
 
 struct MockWiFiNetwork: Identifiable, Hashable, Codable {
     var id: String { ssid }
-    let ssid: String
+    var ssid: String
     let security: Security
     var signal: Int          // 1...3
     let isHotspot: Bool
+    var weakSecurity: Bool
+    var password: String = ""
+    var ipAddress: String = ""
+    var router: String = ""
 
-    enum Security: String, Codable {
+    enum Security: String, Codable, CaseIterable {
         case none, wpa2, wpa3, enterprise
         var label: String {
             switch self {
@@ -19,7 +23,36 @@ struct MockWiFiNetwork: Identifiable, Hashable, Codable {
             }
         }
         var isSecured: Bool { self != .none }
-        var isWeak: Bool { self == .wpa2 }
+    }
+
+    var isWeak: Bool { weakSecurity }
+
+    init(ssid: String, security: Security = .wpa2, signal: Int = 2, isHotspot: Bool = false,
+         weakSecurity: Bool? = nil, password: String = "", ipAddress: String = "", router: String = "") {
+        self.ssid = ssid
+        self.security = security
+        self.signal = signal
+        self.isHotspot = isHotspot
+        self.weakSecurity = weakSecurity ?? (security == .wpa2)
+        self.password = password
+        self.ipAddress = ipAddress
+        self.router = router
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case ssid, security, signal, isHotspot, weakSecurity, password, ipAddress, router
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        ssid = try c.decode(String.self, forKey: .ssid)
+        security = try c.decode(Security.self, forKey: .security)
+        signal = try c.decode(Int.self, forKey: .signal)
+        isHotspot = try c.decode(Bool.self, forKey: .isHotspot)
+        weakSecurity = try c.decodeIfPresent(Bool.self, forKey: .weakSecurity) ?? (security == .wpa2)
+        password = try c.decodeIfPresent(String.self, forKey: .password) ?? ""
+        ipAddress = try c.decodeIfPresent(String.self, forKey: .ipAddress) ?? ""
+        router = try c.decodeIfPresent(String.self, forKey: .router) ?? ""
     }
 }
 
@@ -31,6 +64,7 @@ final class WiFiEngine {
     private var scanTask: Task<Void, Never>?
     let store = SettingsStore.shared
 
+    /// Default network pool, also used as the reset seed.
     static let pool: [MockWiFiNetwork] = [
         MockWiFiNetwork(ssid: "Home-5G", security: .wpa2, signal: 3, isHotspot: false),
         MockWiFiNetwork(ssid: "Home", security: .wpa2, signal: 3, isHotspot: false),
@@ -45,7 +79,7 @@ final class WiFiEngine {
 
     static func network(for ssid: String?) -> MockWiFiNetwork? {
         guard let ssid else { return nil }
-        return pool.first { $0.ssid == ssid }
+        return SettingsStore.shared.wifiNetworks.first { $0.ssid == ssid }
     }
 
     func startScanning() {
@@ -54,10 +88,10 @@ final class WiFiEngine {
         scanTask = Task { [weak self] in
             guard let self else { return }
             scanning = true
-            visible = Self.pool.filter { store.knownNetworkSSIDs.contains($0.ssid) }
+            visible = store.wifiNetworks.filter { store.knownNetworkSSIDs.contains($0.ssid) }
             try? await Task.sleep(for: .seconds(1.2))
             guard !Task.isCancelled else { return }
-            withAnimation(.smooth) { visible = Self.pool }
+            withAnimation(.smooth) { visible = store.wifiNetworks }
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(6))
                 guard !Task.isCancelled else { break }

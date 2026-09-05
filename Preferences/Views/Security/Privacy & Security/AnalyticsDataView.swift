@@ -17,7 +17,10 @@ struct AnalyticsDataView: View {
             Section {
                 ForEach(files) { file in
                     NavigationLink(value: file) {
-                        Text(file.name).font(.footnote).lineLimit(1).truncationMode(.middle)
+                        Text(file.name)
+                            .font(.body.weight(.semibold))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
                     }
                     .contextMenu {
                         ShareLink(item: file.url, preview: SharePreview(file.name, image: Image(systemName: "doc.text")))

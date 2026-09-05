@@ -14,6 +14,7 @@ final class SettingsStore {
     var wifiEnabled: Bool { didSet { UserDefaults.standard.set(wifiEnabled, forKey: "wifi.enabled") } }
     var knownNetworkSSIDs: Set<String> { didSet { persist(Array(knownNetworkSSIDs), key: "wifi.known") } }
     var connectedSSID: String? { didSet { UserDefaults.standard.set(connectedSSID, forKey: "wifi.connected") } }
+    var wifiNetworks: [MockWiFiNetwork] { didSet { persist(wifiNetworks, key: "wifi.networks") } }
 
     // MARK: Battery
     var lowPowerMode: Bool { didSet { UserDefaults.standard.set(lowPowerMode, forKey: "battery.lowPower") } }
@@ -33,6 +34,7 @@ final class SettingsStore {
         wifiEnabled = d.object(forKey: "wifi.enabled") as? Bool ?? true
         knownNetworkSSIDs = Set(SettingsStore.load([String].self, key: "wifi.known") ?? ["Home-5G"])
         connectedSSID = d.object(forKey: "wifi.connected") == nil ? "Home-5G" : d.string(forKey: "wifi.connected")
+        wifiNetworks = SettingsStore.load([MockWiFiNetwork].self, key: "wifi.networks") ?? WiFiEngine.pool
         lowPowerMode = d.bool(forKey: "battery.lowPower")
         adaptivePower = d.bool(forKey: "battery.adaptive")
         batteryPercentage = d.object(forKey: "battery.percentage") as? Bool ?? true
@@ -48,5 +50,12 @@ final class SettingsStore {
     }
     private static func load<T: Decodable>(_ type: T.Type, key: String) -> T? {
         UserDefaults.standard.data(forKey: key).flatMap { try? JSONDecoder().decode(type, from: $0) }
+    }
+
+    /// Restores the default network pool (Mock Configuration → Reset Wi-Fi Networks).
+    func resetWiFi() {
+        wifiNetworks = WiFiEngine.pool
+        knownNetworkSSIDs = ["Home-5G"]
+        connectedSSID = "Home-5G"
     }
 }
