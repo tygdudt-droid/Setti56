@@ -7,6 +7,7 @@ import SwiftUI
 
 /// Settings > General
 struct GeneralView: View {
+    @AppStorage("AirDropSelection") private var airDropSelection = "Contacts Only"
     @State private var titleVisible = false
     @State private var showingHomeButtonSheet = false
     private let path = "/System/Library/PrivateFrameworks/Settings/GeneralSettingsUI.framework"
@@ -56,9 +57,22 @@ struct GeneralView: View {
             Section {
                 SLink(
                     "AIRDROP".localized(path: path, table: table),
-                    icon: "com.apple.graphic-icon.airdrop",
+                    status: airDropSelection,
                     destination: AirDropView()
                 )
+                .contextMenu {
+                    ForEach(["Receiving Off", "Contacts Only", "Everyone for 10 Minutes"], id: \.self) { option in
+                        Button {
+                            airDropSelection = option
+                        } label: {
+                            if airDropSelection == option {
+                                Label(option, systemImage: "checkmark")
+                            } else {
+                                Text(option)
+                            }
+                        }
+                    }
+                }
                 if !UIDevice.IsSimulator {
                     SLink(
                         "CONTINUITY".localized(path: path, table: table),

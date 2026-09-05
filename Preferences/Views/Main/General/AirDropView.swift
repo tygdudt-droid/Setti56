@@ -14,22 +14,30 @@ struct AirDropView: View {
     @State private var showingSheet = false
     let options = ["Receiving Off", "Contacts Only", "Everyone for 10 Minutes"]
     let path = "/System/Library/PreferenceBundles/AirDropSettings.bundle"
-    
+
     var body: some View {
         CustomList(title: "AirDrop".localized(path: path)) {
-            // AirDrop Visibility Picker Section
+            // AirDrop Visibility — tap-to-select rows with checkmark
             Section {
-                Picker("AirDrop Visibility".localized(path: path), selection: $selection) {
-                    ForEach(options, id: \.self) { option in
-                        Text(option.localized(path: path))
+                ForEach(options, id: \.self) { option in
+                    Button {
+                        selection = option
+                    } label: {
+                        HStack {
+                            Text(option.localized(path: path))
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            if selection == option {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(.blue)
+                            }
+                        }
                     }
                 }
-                .pickerStyle(.inline)
-                .labelsHidden()
             } footer: {
                 Text(.init("AirDrop Learn More Footer WIFI".localized(path: path).replacing("airDropSettingsOBK", with: "pref")))
             }
-            
+
             if UIDevice.iPhone {
                 // Start Sharing By Section
                 Section {
@@ -39,7 +47,7 @@ struct AirDropView: View {
                 } footer: {
                     Text("Easily swap numbers with NameDrop, share photos, and more by holding the top of your iPhone close to another iPhone.".localized(path: path))
                 }
-                
+
                 // Out of Range Section
                 Section {
                     Toggle("Use Cellular Data".localized(path: path), isOn: $cellularUsageEnabled)
@@ -48,9 +56,9 @@ struct AirDropView: View {
                 } footer: {
                     Text("Continue to send and receive content when Wi-Fi is not available during AirDrop.".localized(path: path))
                 }
-                
+
             }
-            
+
             Section {
                 // Missing entitlements to open: contacts-sensitive:///list/other-known
                 Button("Manage Known AirDrop Contacts".localized(path: path)) {}

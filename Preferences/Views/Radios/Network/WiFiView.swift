@@ -129,7 +129,7 @@ struct CheckmarkOptionListView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        List {
+        CustomList(title: title, topPadding: true) {
             Section {
                 ForEach(options, id: \.self) { option in
                     Button {
@@ -147,8 +147,6 @@ struct CheckmarkOptionListView: View {
                 }
             }
         }
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

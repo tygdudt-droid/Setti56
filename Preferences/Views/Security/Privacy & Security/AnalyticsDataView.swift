@@ -1,31 +1,46 @@
 import SwiftUI
 
+/// Settings > Privacy & Security > Analytics & Improvements > Analytics Data
+/// Matches iOS: a plain file list (searchable) where each file opens a
+/// monospaced viewer with its own Share button. Long-press a row for quick Share.
 struct AnalyticsDataView: View {
     @State private var store = AnalyticsStore.shared
-    @State private var confirmDelete = false
+    @State private var searchText = ""
+
+    private var files: [AnalyticsFile] {
+        guard !searchText.isEmpty else { return store.files }
+        return store.files.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+    }
 
     var body: some View {
-        List(store.files) { file in
-            NavigationLink(value: file) {
-                Text(file.name).font(.footnote).lineLimit(1).truncationMode(.middle)
+        CustomList(title: "Analytics Data", topPadding: true) {
+            Section {
+                ForEach(files) { file in
+                    NavigationLink(value: file) {
+                        Text(file.name).font(.footnote).lineLimit(1).truncationMode(.middle)
+                    }
+                    .contextMenu {
+                        ShareLink(item: file.url, preview: SharePreview(file.name, image: Image(systemName: "doc.text")))
+                        Button("Delete", systemImage: "trash", role: .destructive) {
+                            try? FileManager.default.removeItem(at: file.url)
+                            store.reload()
+                        }
+                    }
+                }
             }
         }
-        .navigationTitle("Analytics Data")
-        .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: AnalyticsFile.self) { AnalyticsFileDetailView(file: $0) }
         .refreshable { store.reload() }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    ShareLink("Share All…", items: store.files.map(\.url))
-                    Button("Delete All", systemImage: "trash", role: .destructive) { confirmDelete = true }
-                } label: { Image(systemName: "ellipsis.circle") }
+        .searchable(
+            text: $searchText,
+            placement: UIDevice.iPhone ? .automatic : .toolbar,
+            prompt: "Search"
+        )
+        .overlay {
+            if store.files.isEmpty {
+                ContentUnavailableView("No Analytics Data", systemImage: "doc.text")
             }
         }
-        .confirmationDialog("Delete all analytics data?", isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("Delete All", role: .destructive) { store.deleteAll() }
-        }
-        .overlay { if store.files.isEmpty { ContentUnavailableView("No Analytics Data", systemImage: "doc.text") } }
     }
 }
 
@@ -38,7 +53,7 @@ struct AnalyticsFileDetailView: View {
             Text(text)
                 .font(.system(size: 11, design: .monospaced))
                 .textSelection(.enabled)
-                .padding()
+                .padding(.horizontal, UIDevice.iPad ? 20 : 12)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .navigationTitle(file.name)
@@ -49,5 +64,11 @@ struct AnalyticsFileDetailView: View {
             }
         }
         .task { text = AnalyticsStore.shared.contents(of: file) }
+    }
+}
+
+#Preview {
+    NavigationStack {
+        AnalyticsDataView()
     }
 }
