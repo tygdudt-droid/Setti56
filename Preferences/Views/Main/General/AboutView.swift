@@ -58,7 +58,7 @@ struct AboutView: View {
                 NavigationLink {
                     AppleCareWarrantyView()
                 } label: {
-                    LabeledContent("Coverage Expired")
+                    LabeledContent("Coverage", value: "Expired")
                 }
             }
 
