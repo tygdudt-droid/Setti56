@@ -156,7 +156,10 @@ jobs:
                   write(f, re.sub(r'(ContentView\(\))', r'\1.environment(SettingsStore.shared)', s, count=1)); print('store wired', f)
           PY
           rm -rf _ios26_backup
-
+          
+      - name: Generate iOS 26 sources part 2
+        run: python3 generate_ios26_part2.py .
+        
       - name: Provide AppIcon
         run: |
           CATALOG=$(find Preferences -name "Assets.xcassets" -not -path "*Preview*" | head -1)
