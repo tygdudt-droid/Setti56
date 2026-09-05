@@ -116,7 +116,7 @@ struct NetworkDetailView: View {
             }
 
             Section(header: Text("Security").textCase(nil)) {
-                LabeledContent(network.security.label)
+                LabeledContent("Security", value: network.security.label)
             }
         }
         .navigationTitle(network.ssid)
