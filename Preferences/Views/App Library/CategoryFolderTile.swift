@@ -61,12 +61,21 @@ struct AppContextMenu: View {
     var body: some View {
         Button("Add to Home Screen", systemImage: "plus.square.on.square") {}
         Button("Share App", systemImage: "square.and.arrow.up") {}
-        Button(isHidden ? "Don’t Require Face ID" : "Require Face ID", systemImage: isHidden ? "faceid" : "faceid") {
-            withAnimation(.spring) {
-                if isHidden { store.hiddenAppBundleIDs.remove(app.bundleID) } else { store.hiddenAppBundleIDs.insert(app.bundleID) }
-            }
+        Button(isHidden ? "Don’t Require Face ID" : "Require Face ID", systemImage: "faceid") {
+            toggleHidden(app, in: store, isHidden: isHidden)
         }
         Button("Delete App", systemImage: "trash", role: .destructive) {}
+    }
+}
+
+@MainActor
+private func toggleHidden(_ app: MockApp, in store: SettingsStore, isHidden: Bool) {
+    withAnimation(.spring()) {
+        if isHidden {
+            _ = store.hiddenAppBundleIDs.remove(app.bundleID)
+        } else {
+            _ = store.hiddenAppBundleIDs.insert(app.bundleID)
+        }
     }
 }
 

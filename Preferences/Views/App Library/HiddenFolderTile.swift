@@ -84,7 +84,11 @@ struct HiddenFolderExpandedView: View {
         ZStack {
             Rectangle().fill(.ultraThinMaterial).ignoresSafeArea()
             if apps.isEmpty {
-                ContentUnavailableView("No Hidden Apps", systemImage: "eye.slash", description: Text("Touch and hold an app and choose Require Face ID to hide it."))
+                ContentUnavailableView {
+                    Label("No Hidden Apps", systemImage: "eye.slash")
+                } description: {
+                    Text("Touch and hold an app and choose Require Face ID to hide it.")
+                }
             }
             ScrollView {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 24) {
@@ -92,7 +96,7 @@ struct HiddenFolderExpandedView: View {
                         VStack(spacing: 6) {
                             AppIconView(app: app, side: 62)
                                 .contextMenu {
-                                    Button("Unhide", systemImage: "eye") { withAnimation(.spring()) { store.hiddenAppBundleIDs.remove(app.bundleID) } }
+                                    Button("Unhide", systemImage: "eye") { unhideMockApp(app, in: store) }
                                 }
                             Text(app.name).font(.caption).lineLimit(1)
                         }
@@ -108,6 +112,14 @@ struct HiddenFolderExpandedView: View {
         .navigationTitle("Hidden")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { appeared = true }
+    }
+}
+
+/// Shared helper so the unhide action stays easy for the type-checker.
+@MainActor
+private func unhideMockApp(_ app: MockApp, in store: SettingsStore) {
+    withAnimation(.spring()) {
+        _ = store.hiddenAppBundleIDs.remove(app.bundleID)
     }
 }
 
@@ -148,20 +160,18 @@ struct HiddenAppsView: View {
             Rectangle().fill(.ultraThinMaterial).ignoresSafeArea()
             ScrollView {
                 if hidden.isEmpty {
-                    ContentUnavailableView(
-                        "No Hidden Apps",
-                        systemImage: "eye.slash",
-                        description: Text("Touch and hold an app and choose Require Face ID to hide it.")
-                    )
+                    ContentUnavailableView {
+                        Label("No Hidden Apps", systemImage: "eye.slash")
+                    } description: {
+                        Text("Touch and hold an app and choose Require Face ID to hide it.")
+                    }
                 } else {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 24) {
                         ForEach(Array(hidden.enumerated()), id: \.element.id) { i, app in
                             VStack(spacing: 6) {
                                 AppIconView(app: app, side: 62)
                                     .contextMenu {
-                                        Button("Unhide", systemImage: "eye") {
-                                            withAnimation(.spring()) { store.hiddenAppBundleIDs.remove(app.bundleID) }
-                                        }
+                                        Button("Unhide", systemImage: "eye") { unhideMockApp(app, in: store) }
                                     }
                                 Text(app.name).font(.caption).lineLimit(1)
                             }

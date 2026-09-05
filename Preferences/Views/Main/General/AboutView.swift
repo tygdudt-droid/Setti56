@@ -49,7 +49,6 @@ struct AboutView: View {
                     .contextMenu {
                         Button("Copy", systemImage: "doc.on.doc") {
                             UIPasteboard.general.string = identity.serialNumber
-                            copiedField = "serial"
                         }
                     }
             }
