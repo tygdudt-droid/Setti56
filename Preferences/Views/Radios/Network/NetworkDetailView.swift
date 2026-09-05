@@ -26,7 +26,7 @@ struct NetworkDetailView: View {
     var body: some View {
         List {
             // MARK: Weak Security warning
-            if network.security.isWeak {
+            if network.isWeak {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Weak Security").font(.headline)

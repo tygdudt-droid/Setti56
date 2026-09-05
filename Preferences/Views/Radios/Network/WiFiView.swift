@@ -37,7 +37,7 @@ struct WiFiView: View {
                 Toggle("Wi-Fi", isOn: $store.wifiEnabled)
 
                 if store.wifiEnabled, let net = connectedNetwork {
-                    NetworkRow(network: net, state: .connected, subtitle: net.security.isWeak ? "Weak Security" : "")
+                    NetworkRow(network: net, state: .connected, subtitle: net.isWeak ? "Weak Security" : "")
                 }
             } footer: {
                 if !store.wifiEnabled {
@@ -50,7 +50,7 @@ struct WiFiView: View {
                 if !knownNetworks.isEmpty {
                     Section(header: Text("My Networks").textCase(nil)) {
                         ForEach(knownNetworks) { net in
-                            NetworkRow(network: net, state: .idle, subtitle: net.security.isWeak ? "Weak Security" : "") { joining = net }
+                            NetworkRow(network: net, state: .idle, subtitle: net.isWeak ? "Weak Security" : "") { joining = net }
                         }
                     }
                 }
@@ -58,7 +58,7 @@ struct WiFiView: View {
                 // MARK: Networks / Other…
                 Section(header: Text("Networks").textCase(nil)) {
                     ForEach(otherNetworks) { net in
-                        NetworkRow(network: net, state: .idle, subtitle: net.security.isWeak ? "Weak Security" : "") { joining = net }
+                        NetworkRow(network: net, state: .idle, subtitle: net.isWeak ? "Weak Security" : "") { joining = net }
                     }
                     if engine.scanning {
                         HStack(spacing: 10) {

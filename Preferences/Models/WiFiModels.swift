@@ -4,9 +4,9 @@ import Observation
 struct MockWiFiNetwork: Identifiable, Hashable, Codable {
     var id: String { ssid }
     var ssid: String
-    let security: Security
+    var security: Security
     var signal: Int          // 1...3
-    let isHotspot: Bool
+    var isHotspot: Bool
     var weakSecurity: Bool
     var password: String = ""
     var ipAddress: String = ""
