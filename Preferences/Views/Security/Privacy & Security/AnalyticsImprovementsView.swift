@@ -10,6 +10,7 @@ struct AnalyticsImprovementsView: View {
     @AppStorage("analytics.health") private var health = true
     @AppStorage("analytics.siri") private var siri = true
     @AppStorage("analytics.assistive") private var assistive = true
+    @State private var showData = false
 
     private var deviceName: String { MockDevice.current.deviceTypeName }
 
@@ -18,7 +19,16 @@ struct AnalyticsImprovementsView: View {
             // MARK: Share [Device] Analytics + Analytics Data (one card)
             Section {
                 Toggle("Share \(deviceName) Analytics", isOn: $share)
-                NavigationLink("Analytics Data") { AnalyticsDataView() }
+                Button { showData = true } label: {
+                    HStack {
+                        Text("Analytics Data")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .foregroundStyle(.primary)
             } footer: {
                 Text("Help Apple improve its products and services by automatically sending daily diagnostic and usage data. Data may include location information. Analytics uses wireless data. [About Analytics & Privacy…](https://www.apple.com/legal/privacy/data/)")
             }
@@ -57,6 +67,9 @@ struct AnalyticsImprovementsView: View {
             } footer: {
                 Text("Help Apple improve Vocal Shortcuts and Voice Control by sharing audio recordings of your Vocal Shortcuts and Voice Control interactions from this device. [About Improve Assistive Voice Features & Privacy...](https://www.apple.com/legal/privacy/data/)")
             }
+        }
+        .navigationDestination(isPresented: $showData) {
+            AnalyticsDataView()
         }
         .navigationTitle("Analytics & Improvements")
         .navigationBarTitleDisplayMode(.inline)

@@ -142,34 +142,41 @@ struct HiddenAppsSettingsSection: View {
     }
 }
 
-/// Settings > Apps > Hidden Apps — Face ID / passcode gate, then a
-/// de-blur reveal animation and a full-size grid of hidden apps.
+/// Settings > Apps > Hidden Apps — Face ID / passcode gate, then the iOS
+/// layout: a big rounded card with the empty state or the hidden-apps grid,
+/// and a "Size ⇅" sort control in the toolbar.
 struct HiddenAppsView: View {
     @Environment(SettingsStore.self) private var store
     @State private var unlocked = false
     @State private var showPasscode = false
     @State private var shake = 0
     @State private var gateChecked = false
+    @State private var sortByName = false
 
     private var hidden: [MockApp] {
         MockAppCatalog.all.filter { store.hiddenAppBundleIDs.contains($0.bundleID) }
     }
 
+    private var sortedHidden: [MockApp] {
+        sortByName ? hidden.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending } : hidden
+    }
+
     var body: some View {
-        ZStack {
-            Rectangle().fill(.ultraThinMaterial).ignoresSafeArea()
-            ScrollView {
-                if hidden.isEmpty {
+        CustomList(title: "Hidden Apps", topPadding: true) {
+            Section {
+                if sortedHidden.isEmpty {
                     ContentUnavailableView {
-                        Label("No Hidden Apps", systemImage: "eye.slash")
+                        Label("No Hidden Apps", systemImage: "square.stack.3d.up.slash")
                     } description: {
-                        Text("Touch and hold an app and choose Require Face ID to hide it.")
+                        Text("No hidden apps found.")
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 56)
                 } else {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 24) {
-                        ForEach(Array(hidden.enumerated()), id: \.element.id) { i, app in
+                        ForEach(Array(sortedHidden.enumerated()), id: \.element.id) { i, app in
                             VStack(spacing: 6) {
-                                AppIconView(app: app, side: 62)
+                                AppIconView(app: app, side: 60)
                                     .contextMenu {
                                         Button("Unhide", systemImage: "eye") { unhideMockApp(app, in: store) }
                                     }
@@ -180,12 +187,17 @@ struct HiddenAppsView: View {
                             .scaleEffect(unlocked ? 1 : 0.92)
                         }
                     }
-                    .padding(24)
+                    .padding(.vertical, 24)
                 }
             }
         }
-        .navigationTitle("Hidden Apps")
-        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { sortByName.toggle() } label: {
+                    Label("Size", systemImage: "arrow.up.arrow.down")
+                }
+            }
+        }
         .modifier(ShakeEffect(shakes: shake))
         .task { await gate() }
         .sheet(isPresented: $showPasscode) {

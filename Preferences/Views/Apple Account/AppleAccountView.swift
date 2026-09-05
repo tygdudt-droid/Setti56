@@ -10,17 +10,11 @@ struct AppleAccountView: View {
 
     var body: some View {
         if let account = store.account {
-            List {
+            CustomList(title: "Apple Account", topPadding: true) {
                 Section {
                     VStack(spacing: 10) {
                         PhotosPicker(selection: $photoItem, matching: .images) {
-                            ZStack(alignment: .bottomTrailing) {
-                                AvatarView(account: account, size: 110)
-                                Text("EDIT").font(.caption2.bold())
-                                    .padding(.horizontal, 8).padding(.vertical, 4)
-                                    .background(Capsule().fill(.thinMaterial))
-                                    .offset(x: 4, y: 4)
-                            }
+                            AvatarView(account: account, size: 110)
                         }
                         .buttonStyle(.plain)
                         Text(account.fullName).font(.title2.weight(.semibold))
@@ -38,10 +32,11 @@ struct AppleAccountView: View {
                 }
 
                 Section {
-                    row("iCloud", "icloud", .blue, value: "5 GB")
-                    row("Family", "person.2", .blue)
-                    row("Media & Purchases", "appstore", .blue)
-                    row("Sign in with Apple", "apple.logo", .black)
+                    row("iCloud", "icloud.fill", .blue, value: "5 GB")
+                    row("Family", "person.2.fill", .blue, value: "Set Up")
+                    row("Find My", "location.fill", .green)
+                    row("Media & Purchases", "square.stack.3d.up.fill", .blue)
+                    row("Sign in with Apple", "apple.logo", .white, iconTint: .black)
                 }
 
                 Section {
@@ -52,15 +47,13 @@ struct AppleAccountView: View {
                             Text("This \(MockDevice.current.deviceTypeName)").font(.footnote).foregroundStyle(.secondary)
                         }
                     }
-                } header: { Text("Devices") }
+                } header: { Text("Devices").textCase(nil) }
 
                 Section {
                     Button("Sign Out", role: .destructive) { confirmSignOut = true }
                         .frame(maxWidth: .infinity)
                 }
             }
-            .navigationTitle("Apple Account")
-            .navigationBarTitleDisplayMode(.inline)
             .onChange(of: photoItem) { _, item in
                 guard let item else { return }
                 Task {
@@ -82,10 +75,10 @@ struct AppleAccountView: View {
         }
     }
 
-    private func row(_ title: String, _ icon: String, _ color: Color, value: String? = nil) -> some View {
+    private func row(_ title: String, _ icon: String, _ color: Color, value: String? = nil, iconTint: Color = .white) -> some View {
         NavigationLink { ContentUnavailableView(title, systemImage: icon) } label: {
             HStack(spacing: 12) {
-                Image(systemName: icon).foregroundStyle(.white).frame(width: 29, height: 29)
+                Image(systemName: icon).foregroundStyle(iconTint).frame(width: 29, height: 29)
                     .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(color))
                 Text(title)
                 Spacer()
@@ -116,4 +109,11 @@ private struct KeepDataSheet: View {
             }
         }
     }
+}
+
+#Preview {
+    NavigationStack {
+        AppleAccountView()
+    }
+    .environment(SettingsStore.shared)
 }
