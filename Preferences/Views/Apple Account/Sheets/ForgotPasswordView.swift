@@ -35,11 +35,10 @@ struct ForgotPasswordView: View {
                             .padding(.bottom, 20)
                         TextField("SIGN_IN_USERNAME_PLACEHOLDER".localized(path: path), text: $username)
                             .usernameTextStyle()
-                            .onAppear {
-                                if !username.isEmpty {
-                                    dismiss()
-                                }
-                            }
+                            .textContentType(.username)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.emailAddress)
                     }
                     .frame(maxWidth: .infinity)
                     .multilineTextAlignment(.leading)

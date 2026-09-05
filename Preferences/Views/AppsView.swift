@@ -176,19 +176,8 @@ struct AppsView: View {
             
             // MARK: Hidden Apps
             if searchText.isEmpty {
-                if UIDevice.IsSimulator {
-                    Button {} label: {
-                        SLink("Hidden Apps".localized(path: path), icon: "com.apple.graphic-icon.hidden-apps") {}
-                    }
-                    .foregroundStyle(.primary)
-                } else {
-                    SLink("Hidden Apps".localized(path: path), icon: "com.apple.graphic-icon.hidden-apps") {
-                        ContentUnavailableView(
-                            "No Hidden Apps".localized(path: path),
-                            systemImage: "square.stack.3d.up.slash.fill",
-                            description: Text("No hidden apps found.".localized(path: path))
-                        )
-                    }
+                SLink("Hidden Apps".localized(path: path), icon: "com.apple.graphic-icon.hidden-apps") {
+                    HiddenAppsView()
                 }
             }
         }

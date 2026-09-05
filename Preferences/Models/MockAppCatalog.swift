@@ -40,7 +40,7 @@ extension Color {
 
 enum MockAppCatalog {
     static let all: [MockApp] = [
-        MockApp(bundleID: "com.mock.chirp", name: "Chirp", icon: "bird.fill", tintHex: "1D9BF0", category: .social, installedAt: .daysAgo(40)),
+        MockApp(bundleID: "com.mock.chirp", name: "Chirp", icon: "feather", tintHex: "1D9BF0", category: .social, installedAt: .daysAgo(40)),
         MockApp(bundleID: "com.mock.mosaic", name: "Mosaic", icon: "square.grid.3x3.fill", tintHex: "E1306C", category: .social, installedAt: .daysAgo(3)),
         MockApp(bundleID: "com.mock.pingme", name: "PingMe", icon: "bubble.left.and.bubble.right.fill", tintHex: "25D366", category: .social, installedAt: .daysAgo(90)),
         MockApp(bundleID: "com.mock.streamr", name: "Streamr", icon: "play.rectangle.fill", tintHex: "E50914", category: .entertainment, installedAt: .daysAgo(80)),

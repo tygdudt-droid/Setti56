@@ -17,6 +17,8 @@ struct PreferencesApp: App {
         WindowGroup {
             ContentView()
                 .environment(model)
+                .environment(SettingsStore.shared)
+                .environment(AnalyticsStore.shared)
         }
         .commands {
             CommandGroup(replacing: .appSettings) {
@@ -57,7 +59,7 @@ struct PreferencesApp: App {
                 type: "com.example.Preferences.bluetooth",
                 localizedTitle: "Bluetooth",
                 localizedSubtitle: nil,
-                icon: UIApplicationShortcutIconHelper.icon(withSystemImageName: "bluetooth")
+                icon: UIApplicationShortcutIcon(systemImageName: "bluetooth")
             ),
             UIApplicationShortcutItem(
                 type: "com.example.Preferences.wifi",

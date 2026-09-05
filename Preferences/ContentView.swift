@@ -44,19 +44,7 @@ struct ContentView: View {
                     }
                     
                     Section {
-                        Button {
-                            if model.isConnected {
-                                showingSignInSheet.toggle()
-                            } else {
-                                SettingsLogger.info("Presenting Network Alert.")
-                                showingSignInError.toggle()
-                            }
-                        } label: {
-                            NavigationLink {} label: {
-                                AppleAccountSection()
-                            }
-                            .navigationLinkIndicatorVisibility(UIDevice.iPad && !model.isCompact ? .hidden : .visible)
-                        }
+                        AppleAccountHeaderRow()
                     }
                     
                     if !followUpDismissed {
@@ -74,8 +62,8 @@ struct ContentView: View {
             }
             .navigationTitle(UIDevice.iPhone || model.isCompact ? .settings : "")
             .toolbar(removing: .sidebarToggle)
-            .alert(.connectToTheInternetToSignInToYourDevice, isPresented: $showingSignInError) {
-                Button(.ok) {}
+            .alert("Connect to the Internet to sign in to your device.", isPresented: $showingSignInError) {
+                Button("OK") {}
             }
             .sheet(isPresented: $showingSignInSheet) {
                 NavigationStack {
@@ -92,16 +80,16 @@ struct ContentView: View {
                 if UIDevice.iPad && model.searchFocused && !searchText.isEmpty {
                     GeometryReader { geo in
                         List {
-                            if searchText.isEmpty {
-                                Section("Suggestions") {}
-                            } else {
-                                ContentUnavailableView.search(text: searchText)
-                                    .frame(minHeight: 0, idealHeight: geo.size.height, maxHeight: .infinity)
-                                    .edgesIgnoringSafeArea(.all)
-                                    .listRowSeparator(.hidden)
+                            SearchResultsView(results: searchResults) { item in
+                                model.selection = item
+                                model.searchFocused = false
+                                searchText = ""
                             }
+                            .frame(minHeight: 0, idealHeight: geo.size.height, maxHeight: .infinity)
+                            .edgesIgnoringSafeArea(.all)
+                            .listRowSeparator(.hidden)
                         }
-                        .scrollDisabled(!searchText.isEmpty)
+                        .scrollDisabled(searchResults.isEmpty)
                         .listStyle(.inset)
                     }
                 } else if UIDevice.iPhone && model.searchFocused {
@@ -110,13 +98,13 @@ struct ContentView: View {
                             if searchText.isEmpty {
                                 SettingsSearchView()
                             } else {
-                                ContentUnavailableView.search(text: searchText)
+                                SearchResultsView(results: searchResults)
                                     .frame(minHeight: 0, idealHeight: geo.size.height, maxHeight: .infinity)
                                     .edgesIgnoringSafeArea(.all)
                                     .listRowSeparator(.hidden)
                             }
                         }
-                        .scrollDisabled(!searchText.isEmpty)
+                        .scrollDisabled(searchText.isEmpty)
                         .listStyle(.inset)
                     }
                 }
@@ -192,7 +180,7 @@ struct ContentView: View {
                 )
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button(.done) {
+                        Button("Done") {
                             showingResearchSheet = false
                         }
                     }
@@ -203,9 +191,65 @@ struct ContentView: View {
             DeviceSupervisionView()
         }
     }
+
+    /// All top-level rows, used by the live search index.
+    private var searchIndex: [SettingsItem] {
+        model.followUpSettings
+            + model.radioSettings
+            + model.mainSettings
+            + model.attentionSettings
+            + model.securitySettings
+            + model.serviceSettings
+            + model.appsSettings
+            + model.developerSettings
+    }
+
+    private var searchResults: [SettingsItem] {
+        guard !searchText.isEmpty else { return [] }
+        return searchIndex.filter { $0.title.localizedCaseInsensitiveContains(searchText) }
+    }
+}
+
+/// Rows shown while typing in the main Settings search field.
+struct SearchResultsView: View {
+    @Environment(PrimarySettingsListModel.self) private var model
+    let results: [SettingsItem]
+    var onSelect: ((SettingsItem) -> Void)? = nil
+
+    var body: some View {
+        Section {
+            if results.isEmpty {
+                ContentUnavailableView("No Results", systemImage: "magnifyingglass")
+                    .listRowSeparator(.hidden)
+            } else {
+                ForEach(results) { item in
+                    if UIDevice.iPhone || model.isCompact {
+                        NavigationLink {
+                            item.destination
+                        } label: {
+                            SLabel(item.title, icon: item.icon)
+                        }
+                        .foregroundStyle(.primary)
+                    } else {
+                        Button {
+                            onSelect?(item)
+                        } label: {
+                            SLabel(item.title, icon: item.icon)
+                        }
+                        .foregroundStyle(.primary)
+                    }
+                }
+            }
+        } header: {
+            if !results.isEmpty {
+                Text("Results")
+            }
+        }
+    }
 }
 
 #Preview {
     ContentView()
         .environment(PrimarySettingsListModel())
+        .environment(SettingsStore.shared)
 }

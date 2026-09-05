@@ -92,7 +92,7 @@ struct HiddenFolderExpandedView: View {
                         VStack(spacing: 6) {
                             AppIconView(app: app, side: 62)
                                 .contextMenu {
-                                    Button("Unhide", systemImage: "eye") { withAnimation(.spring) { store.hiddenAppBundleIDs.remove(app.bundleID) } }
+                                    Button("Unhide", systemImage: "eye") { withAnimation(.spring()) { store.hiddenAppBundleIDs.remove(app.bundleID) } }
                                 }
                             Text(app.name).font(.caption).lineLimit(1)
                         }
@@ -127,5 +127,85 @@ struct HiddenAppsSettingsSection: View {
             TextField("6 digits", text: $store.mockPasscode).keyboardType(.numberPad)
             Button("Done") { store.mockPasscode = String(store.mockPasscode.filter(\.isNumber).prefix(6)) }
         }
+    }
+}
+
+/// Settings > Apps > Hidden Apps — Face ID / passcode gate, then a
+/// de-blur reveal animation and a full-size grid of hidden apps.
+struct HiddenAppsView: View {
+    @Environment(SettingsStore.self) private var store
+    @State private var unlocked = false
+    @State private var showPasscode = false
+    @State private var shake = 0
+    @State private var gateChecked = false
+
+    private var hidden: [MockApp] {
+        MockAppCatalog.all.filter { store.hiddenAppBundleIDs.contains($0.bundleID) }
+    }
+
+    var body: some View {
+        ZStack {
+            Rectangle().fill(.ultraThinMaterial).ignoresSafeArea()
+            ScrollView {
+                if hidden.isEmpty {
+                    ContentUnavailableView(
+                        "No Hidden Apps",
+                        systemImage: "eye.slash",
+                        description: Text("Touch and hold an app and choose Require Face ID to hide it.")
+                    )
+                } else {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 24) {
+                        ForEach(Array(hidden.enumerated()), id: \.element.id) { i, app in
+                            VStack(spacing: 6) {
+                                AppIconView(app: app, side: 62)
+                                    .contextMenu {
+                                        Button("Unhide", systemImage: "eye") {
+                                            withAnimation(.spring()) { store.hiddenAppBundleIDs.remove(app.bundleID) }
+                                        }
+                                    }
+                                Text(app.name).font(.caption).lineLimit(1)
+                            }
+                            .blur(radius: unlocked ? 0 : 14)
+                            .saturation(unlocked ? 1 : 0)
+                            .scaleEffect(unlocked ? 1 : 0.92)
+                        }
+                    }
+                    .padding(24)
+                }
+            }
+        }
+        .navigationTitle("Hidden Apps")
+        .navigationBarTitleDisplayMode(.inline)
+        .modifier(ShakeEffect(shakes: shake))
+        .task { await gate() }
+        .sheet(isPresented: $showPasscode) {
+            MockPasscodeSheet(title: "Enter Passcode to View Hidden Apps") { ok in
+                showPasscode = false
+                if ok { reveal() } else { fail() }
+            }
+        }
+    }
+
+    private func gate() async {
+        guard store.requireAuthForHiddenApps else { reveal(); return }
+        switch await HiddenAppsAuth.authenticate(reason: "Unlock Hidden Apps") {
+        case .some(true): reveal()
+        case .some(false):
+            if store.mockPasscode.isEmpty { fail() } else { showPasscode = true }
+        case .none:
+            if store.mockPasscode.isEmpty { fail() } else { showPasscode = true }
+        }
+    }
+
+    private func reveal() {
+        gateChecked = true
+        UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+        withAnimation(.spring(response: 0.55, dampingFraction: 0.72)) { unlocked = true }
+    }
+
+    private func fail() {
+        gateChecked = true
+        UINotificationFeedbackGenerator().notificationOccurred(.error)
+        withAnimation(.default) { shake += 1 }
     }
 }

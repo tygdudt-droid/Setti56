@@ -17,6 +17,12 @@ struct HomeScreenAppLibraryView: View {
     var body: some View {
         CustomList(title: "Home Screen & App Library".localized(path: path), topPadding: true) {
             Section {
+                NavigationLink("App Library") {
+                    AppLibraryView()
+                }
+            }
+
+            Section {
                 Picker("Newly Downloaded Apps".localized(path: path), selection: $selected) {
                     ForEach(options, id: \.self) { option in
                         Text(option.localized(path: path))

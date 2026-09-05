@@ -9,14 +9,19 @@ import SwiftUI
 
 struct AppleAccountLoginView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(SettingsStore.self) private var store
     @State var isMainSheet = false
     @State private var signingIn = false
-    @State private var showingAlert = false
     @State private var showingForgotPasswordSheet = false
     @State private var username = ""
+    @State private var password = ""
     private let setupPath = "/System/Library/PrivateFrameworks/AppleIDSetup.framework"
     private let accountPath = "/System/Library/PrivateFrameworks/AppleAccountUI.framework"
-    
+
+    private var canContinue: Bool {
+        (username.contains("@") || username.filter(\.isNumber).count >= 10) && password.count >= 4
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
@@ -38,7 +43,16 @@ struct AppleAccountLoginView: View {
                 // Email or Phone Number
                 TextField("LOGIN_FORM_TEXTFIELD_NAME".localized(path: setupPath), text: $username)
                     .usernameTextStyle()
+                    .textContentType(.username)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .keyboardType(.emailAddress)
                     .padding(.vertical)
+
+                // Password
+                SecureField("Password", text: $password)
+                    .textContentType(.password)
+                    .padding(.bottom)
 
                 // Forgot password?
                 Button("SIGN_IN_HELP_BUTTON_FORGOT_SOLARIUM".localized(path: accountPath), systemImage: "info.circle.fill") {
@@ -49,18 +63,17 @@ struct AppleAccountLoginView: View {
                 .buttonStyle(.plain)
                 .labelIconToTitleSpacing(10)
                 .padding(.bottom, 20)
-                
+
                 // Privacy
                 OBPrivacyLinkView(bundleIdentifiers: ["com.apple.onboarding.appleid"])
                     .frame(minHeight: 130)
-                
+
                 // Continue
                 OBBoldTrayButton("SIGN_IN_BUTTON_CONTINUE".localized(path: accountPath), isLoading: $signingIn) {
-                    signingIn.toggle()
-                    showingAlert.toggle()
+                    signIn()
                 }
                 .frame(height: 50)
-                .disabled(username.count < 1)
+                .disabled(!canContinue || signingIn)
 
                 // Sign in a child in my Family
                 if !isMainSheet {
@@ -72,7 +85,7 @@ struct AppleAccountLoginView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.top, 25)
                 }
-                
+
                 Spacer(minLength: 40)
             }
             .containerRelativeFrame(.vertical)
@@ -93,12 +106,18 @@ struct AppleAccountLoginView: View {
                 ForgotPasswordView()
             }
         }
-        .alert("VERIFICATION_FAILED_TITLE".localized(path: accountPath), isPresented: $showingAlert) {
-            Button("AUTHENTICATE_VIEW_BUTTON_TITLE".localized(path: setupPath)) {
-                signingIn.toggle()
-            }
-        } message: {
-            Text("BAD_NETWORK_ALERT_MESSAGE_REBRAND".localized(path: accountPath))
+    }
+
+    /// Mock sign-in: any valid-looking email/password combination succeeds
+    /// and persists a fake account derived from the entered email.
+    private func signIn() {
+        signingIn = true
+        Task {
+            try? await Task.sleep(for: .seconds(1.4))
+            store.account = .from(email: username)
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            signingIn = false
+            dismiss()
         }
     }
 }

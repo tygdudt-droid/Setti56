@@ -28,9 +28,14 @@ struct OtherNetworkView: View {
                         joining = true
                         Task {
                             let net = MockWiFiNetwork(ssid: name, security: security == "None" ? .none : .wpa2, signal: 2, isHotspot: false)
-                            try? await WiFiEngine.shared.join(net, password: security == "None" ? nil : password)
+                            do {
+                                try await WiFiEngine.shared.join(net, password: security == "None" ? nil : password)
+                                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                                dismiss()
+                            } catch {
+                                // Stay on the sheet so the user can retry the password.
+                            }
                             joining = false
-                            dismiss()
                         }
                     }
                     .disabled(name.isEmpty || (security != "None" && password.count < 8))

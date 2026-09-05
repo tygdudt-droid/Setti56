@@ -208,7 +208,7 @@ final class PrimarySettingsListModel {
                 type: .wifi,
                 icon: "com.apple.graphic-icon.wifi",
                 capabilities: [.isPhysical],
-                destination: AnyView(NetworkView())
+                destination: AnyView(WiFiView())
             ),
             SettingsItem(
                 type: .ethernet,
@@ -249,8 +249,8 @@ final class PrimarySettingsListModel {
             SettingsItem(
                 type: .vpn,
                 icon: "com.apple.graphic-icon.vpn",
-                capabilities: [.vpn],
-                kind: .toggle(key: "VPN")
+                capabilities: [.isPhysical],
+                destination: AnyView(VPNView())
             )
         ]
         
@@ -426,11 +426,6 @@ final class PrimarySettingsListModel {
         ]
         
         developerSettings = [
-            SettingsItem(
-                type: .developer,
-                icon: "com.apple.graphic-icon.developer-tools",
-                destination: AnyView(DeveloperView())
-            ),
             SettingsItem(
                 type: .carrier,
                 icon: "com.apple.graphic-icon.carrier-settings",

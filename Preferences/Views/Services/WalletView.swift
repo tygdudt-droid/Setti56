@@ -49,8 +49,9 @@ struct WalletView: View {
                     SLink(
                         "SETTINGS_APPLE_PAY_DEFAULTS_TITLE".localized(path: path, table: payTable),
                         icon: "com.apple.graphic-icon.account.payment",
-                        subtitle: "SETTINGS_APPLE_PAY_DEFAULTS_SUBTITLE".localized(path: path, table: payTable)
-                    ) {}
+                        subtitle: "SETTINGS_APPLE_PAY_DEFAULTS_SUBTITLE".localized(path: path, table: payTable),
+                        destination: WalletPlaceholderView(title: "SETTINGS_APPLE_PAY_DEFAULTS_TITLE".localized(path: path, table: payTable))
+                    )
                 }
                 
                 Section {
@@ -80,18 +81,38 @@ struct WalletView: View {
             
             SLink(
                 "FPAN_ADD_TO_APPLE_PAY_TITLE".localized(path: path, table: payTable),
-                status: "0"
-            ) {}
-            
+                status: "0",
+                destination: WalletPlaceholderView(title: "FPAN_ADD_TO_APPLE_PAY_TITLE".localized(path: path, table: payTable))
+            )
+
             Section {
                 Toggle("ALLOW_EXPIRED_PASSES_TITLE".localized(path: path), isOn: $hideExpiredPassesEnabled)
             }
-            
+
             Section {
-                NavigationLink("Order Tracking") {}
+                SLink(
+                    "Order Tracking",
+                    icon: "com.apple.graphic-icon.purchase-sharing",
+                    destination: WalletPlaceholderView(title: "Order Tracking")
+                )
             }
         }
         .animation(.default, value: appleCashEnabled)
+    }
+}
+
+/// Simple mock destination so no Wallet row can push a blank (black) page.
+struct WalletPlaceholderView: View {
+    let title: String
+
+    var body: some View {
+        CustomList(title: title, topPadding: true) {
+            Section {
+                LabeledContent("Status", value: "Not Available")
+            } footer: {
+                Text("This section is a mock placeholder and is not available on this device.")
+            }
+        }
     }
 }
 

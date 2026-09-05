@@ -268,13 +268,9 @@ struct PrivacySecurityView: View {
             Section {
                 SLink(
                     "Analytics & Improvements".localized(path: privacy),
-                    icon: "com.apple.graphic-icon.analytics-and-improvements") {
-                    ControllerBridgeView(
-                        "/System/Library/PrivateFrameworks/Settings/PrivacySettingsUI.framework/PrivacySettingsUI",
-                        controller: "PUIProblemReportingController",
-                        title: "Analytics & Improvements".localized(path: privacy)
-                    )
-                }
+                    icon: "com.apple.graphic-icon.analytics-and-improvements",
+                    destination: AnalyticsImprovementsView()
+                )
                 SLink(
                     "Apple Advertising".localized(path: privacy),
                     icon: "com.apple.graphic-icon.apple-advertising",
@@ -308,18 +304,6 @@ struct PrivacySecurityView: View {
 
                 // MARK: Security
                 Section {
-                    if configuration.developerMode {
-                        SLink(
-                            "Developer Mode".localized(path: privacy),
-                            icon: "com.apple.graphic-icon.developer-tools",
-                            status: "Off".localized(path: privacy),
-                            destination: ControllerBridgeView(
-                                "SecuritySettings",
-                                controller: "DeveloperModeViewController",
-                                title: "Developer Mode".localized(path: privacy)
-                            )
-                        )
-                    }
                     SLink(
                         "Wired Accessories".localized(path: privacy),
                         icon: "com.apple.graphic-icon.usb-c-port",

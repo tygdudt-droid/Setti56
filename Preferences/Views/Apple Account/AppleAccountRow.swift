@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Drop this at the very top of the root Settings list.
+/// Simple signed-in/signed-out row (used inside compact lists).
 struct AppleAccountRow: View {
     @Environment(SettingsStore.self) private var store
     @State private var showSignIn = false
@@ -36,4 +36,11 @@ struct AppleAccountRow: View {
             .sheet(isPresented: $showSignIn) { AppleAccountSignInSheet() }
         }
     }
+}
+
+#Preview {
+    List {
+        AppleAccountRow()
+    }
+    .environment(SettingsStore.shared)
 }

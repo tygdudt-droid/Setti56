@@ -50,7 +50,9 @@ struct NetworkDetailView: View {
     }
 }
 
-extension WiFiEngine { static let shared = WiFiEngine() }
+extension WiFiEngine {
+    @MainActor static let shared = WiFiEngine()
+}
 
 private struct ToggleRow: View {
     let title: String; let key: String; let def: Bool

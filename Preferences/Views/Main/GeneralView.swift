@@ -37,14 +37,9 @@ struct GeneralView: View {
                     )
                     SLink(
                         "DEVICE_STORAGE".localized(path: path, table: table),
-                        icon: "com.apple.graphic-icon.external-drive"
-                    ) {
-                        ControllerBridgeView(
-                            "StorageSettingsUI",
-                            controller: "StorageSettingsUIWrapper",
-                            title: "DEVICE_STORAGE".localized(path: path, table: table)
-                        )
-                    }
+                        icon: "com.apple.graphic-icon.external-drive",
+                        destination: DeviceStorageView()
+                    )
                 }
             }
             

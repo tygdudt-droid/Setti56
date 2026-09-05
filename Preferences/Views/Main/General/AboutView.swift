@@ -2,229 +2,126 @@
 //  AboutView.swift
 //  Preferences
 //
+//  Settings > General > About — public API only, cannot crash.
+//
 
 import SwiftUI
 
 /// View for Settings > General > About
 struct AboutView: View {
-    @State private var showingModelNumber = false
-    @AppStorage("ModelNumber") private var modelNumber = ""
-    @AppStorage("RegulatoryModelNumber") private var regulatoryModelNumber = ""
-    @State private var serialNumber = ""
-    @State private var availableStorage = "Error"
-    @State private var capacityStorage = ""
-    @State private var wifiAddress = ""
-    @State private var bluetoothAddress = ""
-    @State private var eidValue = ""
-    @AppStorage("DeviceName") private var deviceName = UIDevice.current.model
-    private let path = "/System/Library/PrivateFrameworks/Settings/GeneralSettingsUI.framework"
-    private let table = "General"
-    
+    @AppStorage("DeviceName") private var storedDeviceName = UIDevice.current.name
+    @State private var showingRegulatoryModel = false
+    @State private var availableStorage = "…"
+    private let device = MockDevice.current
+    private let identity = MockDeviceIdentity.stored
+    private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+
     var body: some View {
-        CustomList(title: "About".localized(path: path, table: table)) {
+        CustomList(title: "About", topPadding: true) {
+            // MARK: Name (own card, like iOS 26)
             Section {
-                if UIDevice.IsSimulator {
-                    LabeledContent("Device_Name".localized(path: path, table: table), value: UIDevice.current.model)
-                } else {
-                    SLink(
-                        "Device_Name".localized(path: path, table: table),
-                        status: deviceName,
-                        destination: NameView()
-                    )
+                NavigationLink {
+                    NameView()
+                } label: {
+                    LabeledContent("Name", value: storedDeviceName)
                 }
-                
-                SLink(
-                    "OS Version".localized(path: path),
-                    status: UIDevice().systemVersion,
-                    destination: ControllerBridgeView(
+            }
+
+            // MARK: Device identity
+            Section {
+                NavigationLink {
+                    ControllerBridgeView(
                         "/System/Library/PrivateFrameworks/Settings/GeneralSettingsUI.framework/GeneralSettingsUI",
                         controller: "PSGSoftwareVersionController",
-                        title: "OS Version".localized(path: path)
+                        title: "\(device.systemName) Version"
                     )
-                )
-                
-                LabeledContent("ProductModelName".localized(path: path), value: UIDevice.`marketing-name`)
+                } label: {
+                    LabeledContent("\(device.systemName) Version", value: device.systemVersion)
+                }
+                LabeledContent("Model Name", value: device.modelName)
                     .textSelection(.enabled)
-                LabeledContent(
-                    "ProductModel".localized(path: path),
-                    value: showingModelNumber ? regulatoryModelNumber : "\(modelNumber)\(getRegionInfo())"
-                )
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    showingModelNumber.toggle()
-                }
-                LabeledContent("SerialNumber".localized(path: path), value: serialNumber)
+                LabeledContent("Model Number", value: showingRegulatoryModel ? identity.regulatoryModel : identity.modelNumber)
+                    .textSelection(.enabled)
+                    .contentShape(Rectangle())
+                    .onTapGesture { showingRegulatoryModel.toggle() }
+                LabeledContent("Serial Number", value: identity.serialNumber)
+                    .textSelection(.enabled)
+                    .contextMenu {
+                        Button("Copy", systemImage: "doc.on.doc") {
+                            UIPasteboard.general.string = identity.serialNumber
+                            copiedField = "serial"
+                        }
+                    }
             }
-            .task {
-                if serialNumber.isEmpty {
-                    serialNumber = MGHelper.read(key: "VasUgeSzVyHdB27g2XpN0g") ?? getRandomSerialNumber() // SerialNumber
-                    modelNumber = MGHelper.read(key: "D0cJ8r7U5zve6uA6QbOiLA") ?? getRegulatoryModelNumber() // ModelNumber
-                    regulatoryModelNumber = getRegulatoryModelNumber()
-                    wifiAddress = generateRandomAddress()
-                    bluetoothAddress = generateRandomAddress()
-                    eidValue = getRandomEID()
-                    capacityStorage = UIDevice.storageCapacity ?? getTotalStorage()
-                }
-            }
-            
+
+            // MARK: Coverage
             Section {
-                LabeledContent("SONGS".localized(path: path), value: "0")
-                LabeledContent("VIDEOS".localized(path: path), value: "0")
-                LabeledContent("PHOTOS".localized(path: path), value: "6")
-                if !UIDevice.IsSimulator {
-                    LabeledContent("APPLICATIONS".localized(path: path), value: "1")
+                NavigationLink {
+                    AppleCareWarrantyView()
+                } label: {
+                    LabeledContent("Coverage Expired")
                 }
-                LabeledContent("User Data Capacity".localized(path: path), value: capacityStorage)
-                LabeledContent("User Data Available".localized(path: path), value: availableStorage)
             }
-            
-            if !UIDevice.IsSimulator {
-                LabeledContent("MACAddress".localized(path: path), value: wifiAddress)
-                LabeledContent("BTMACAddress".localized(path: path), value: bluetoothAddress)
-                if UIDevice.CellularTelephonyCapability {
-                    LabeledContent("ModemVersion".localized(path: path), value: "1.00.00")
-                }
-                NavigationLink("SEID", destination: SEIDView())
-                
-                if UIDevice.CellularTelephonyCapability {
-                    VStack {
-                        Text("EID".localized(path: path))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        Text(eidValue)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // MARK: Content & capacity
+            Section {
+                LabeledContent("Songs", value: "0")
+                LabeledContent("Videos", value: "357")
+                LabeledContent("Photos", value: "2,126")
+                LabeledContent("Applications", value: "\(MockAppCatalog.all.count)")
+                LabeledContent("Capacity", value: "256 GB")
+                LabeledContent("Available", value: availableStorage)
+            }
+
+            // MARK: Network addresses
+            Section {
+                LabeledContent("Wi-Fi Address", value: identity.wifiAddress)
+                    .textSelection(.enabled)
+                LabeledContent("Bluetooth", value: identity.bluetoothAddress)
+                    .textSelection(.enabled)
+            }
+
+            // MARK: Cellular identifiers (cellular devices only)
+            if UIDevice.CellularTelephonyCapability {
+                Section {
+                    LabeledContent("Modem Firmware", value: identity.modemFirmware)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("EID")
+                        Text(identity.eid)
                             .foregroundStyle(.secondary)
                             .font(.caption)
                             .lineLimit(1)
+                            .textSelection(.enabled)
                     }
-                    LabeledContent("CARRIER_LOCK".localized(path: path, table: table), value: "CARRIER_LOCK_UNLOCKED".localized(path: path, table: table))
-                    
-                    Section {
-                        LabeledContent("ModemIMEI".localized(path: path), value: "00 000000 000000 0")
-                            .contextMenu {
-                                Button("COPY".localized(path: path, table: table), systemImage: "document.on.document") {}
-                                Button("BARCODE".localized(path: path, table: table), systemImage: "barcode") {}
-                                Button("SHARE_IDENTITY".localized(path: path, table: table), systemImage: "iphone.gen3.crop.circle") {}
-                            }
-                        LabeledContent("ModemIMEI2".localized(path: path, table: table), value: "00 000000 000000 0")
-                            .contextMenu {
-                                Button("COPY".localized(path: path, table: table), systemImage: "document.on.document") {}
-                                Button("BARCODE".localized(path: path, table: table), systemImage: "barcode") {}
-                                Button("SHARE_IDENTITY".localized(path: path, table: table), systemImage: "iphone.gen3.crop.circle") {}
-                            }
-                    } header: {
-                        Text("AVAILABLE_SIMS".localized(path: path, table: table))
-                    }
+                    LabeledContent("IMSI", value: "—")
+                    LabeledContent("IMEI", value: identity.imei)
+                        .textSelection(.enabled)
                 }
             }
-            
+
+            // MARK: Certificate trust
             Section {
-                NavigationLink("CERT_TRUST_SETTINGS".localized(path: path), destination: ControllerBridgeView("/System/Library/PrivateFrameworks/Settings/GeneralSettingsUI.framework/GeneralSettingsUI", controller: "PSGCertTrustSettings", title: "CERT_TRUST_SETTINGS".localized(path: path)))
+                NavigationLink("Certificate Trust Settings") {
+                    ControllerBridgeView(
+                        "/System/Library/PrivateFrameworks/Settings/GeneralSettingsUI.framework/GeneralSettingsUI",
+                        controller: "PSGCertTrustSettings",
+                        title: "Certificate Trust Settings"
+                    )
+                }
             }
         }
         .task {
-            availableStorage = getAvailableStorage() ?? "Error"
+            availableStorage = getAvailableStorage() ?? "—"
         }
     }
-    
-    // Functions
-    private func getRegionInfo() -> String {
-        if let mobileGestalt = UIDevice.checkDevice() {
-            let cacheExtra = mobileGestalt["CacheExtra"] as! [String : AnyObject]
-            return cacheExtra["zHeENZu+wbg7PUprwNwBWg"] as! String // RegionInfo check
-        }
-        return "LL/A" // Fallback
-    }
-    
-    // Display corresponding model number
-    private func getRegulatoryModelNumber() -> String {
-        // Check MobileGestalt CacheExtra first
-        if let answer = MGHelper.read(key: "97JDvERpVwO+GHtthIh7hA") { // RegulatoryModelNumber
-            return answer
-        }
-        
-        // Fallback
-        if let mobileGestalt = UIDevice.checkDevice() {
-            let cacheExtra = mobileGestalt["CacheExtra"] as! [String : AnyObject]
-            return cacheExtra["97JDvERpVwO+GHtthIh7hA"] as! String // RegulatoryModelNumber cached
-        }
-        
-        return "Error"
-    }
-    
-    // Generate random characters as a serial number
-    private func getRandomSerialNumber() -> String {
-        let letters = "BCDFGHJKLMNPQRTVWXYZ0123456789"
-        var random = SystemRandomNumberGenerator()
-        var randomString = String()
-        for _ in 0..<10 {
-            let randomIndex = Int(random.next(upperBound: UInt32(letters.count)))
-            let randomCharacter = letters[letters.index(letters.startIndex, offsetBy: randomIndex)]
-            randomString.append(randomCharacter)
-        }
-        return randomString
-    }
-    
-    // Generate random characters as EID string
-    private func getRandomEID() -> String {
-        let lowerBound = "10000000000000000000000000000000"
-        let upperBound = "99999999999999999999999999999999"
-        var randomNumber = String()
-        
-        for i in 0..<lowerBound.count {
-            let lowerDigit = lowerBound[lowerBound.index(lowerBound.startIndex, offsetBy: i)].wholeNumberValue!
-            let upperDigit = upperBound[upperBound.index(upperBound.startIndex, offsetBy: i)].wholeNumberValue!
-            
-            let digit = Int.random(in: lowerDigit...upperDigit)
-            randomNumber += "\(digit)"
-        }
-        
-        return randomNumber
-    }
-    
-    // Generate random characters as EID string
-    private func getRandomICCID() -> String {
-        let lowerBound = "1000000000000000000"
-        let upperBound = "9999999999999999999"
-        var randomNumber = String()
-        
-        for i in 0..<lowerBound.count {
-            let lowerDigit = lowerBound[lowerBound.index(lowerBound.startIndex, offsetBy: i)].wholeNumberValue!
-            let upperDigit = upperBound[upperBound.index(upperBound.startIndex, offsetBy: i)].wholeNumberValue!
-            
-            let digit = Int.random(in: lowerDigit...upperDigit)
-            randomNumber += "\(digit)"
-        }
-        
-        return randomNumber
-    }
-    
-    private func getTotalStorage() -> String {
-        let fileManager = FileManager.default
-        guard let systemAttributes = try? fileManager.attributesOfFileSystem(forPath: NSHomeDirectory()),
-              let totalSize = systemAttributes[.systemSize] as? NSNumber else {
-            return "Error"
-        }
-        
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useGB]
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: totalSize.int64Value)
-    }
-    
+
     private func getAvailableStorage() -> String? {
         guard let attributes = try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory()),
               let freeSize = attributes[.systemFreeSize] as? NSNumber else {
             return nil
         }
-        
         return ByteCountFormatter.string(fromByteCount: freeSize.int64Value, countStyle: .file)
     }
-}
-
-func generateRandomAddress() -> String {
-    (0..<6)
-        .map { _ in String(format: "%02X", Int.random(in: 0...255)) }
-        .joined(separator: ":")
 }
 
 #Preview {

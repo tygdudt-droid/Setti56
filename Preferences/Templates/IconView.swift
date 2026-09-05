@@ -30,12 +30,21 @@ struct IconView: View {
     }
     
     var body: some View {
-        if knownUTIPrefix {
-            if let graphicIcon = UIImage.icon(forUTI: icon) {
-                Image(uiImage: graphicIcon)
-            }
-        } else if let asset = UIImage.icon(forBundleID: icon) {
+        if knownUTIPrefix, let graphicIcon = UIImage.icon(forUTI: icon) {
+            Image(uiImage: graphicIcon)
+        } else if !knownUTIPrefix, let asset = UIImage.icon(forBundleID: icon) {
             Image(uiImage: asset)
+        } else {
+            // Placeholder so rows never render without an icon.
+            ZStack {
+                RoundedRectangle(cornerRadius: 6.5, style: .continuous)
+                    .fill(Color(.systemGray4))
+                Image(systemName: "app.fill")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.white)
+            }
+            .frame(width: 29, height: 29)
+            .accessibilityHidden(true)
         }
     }
 }

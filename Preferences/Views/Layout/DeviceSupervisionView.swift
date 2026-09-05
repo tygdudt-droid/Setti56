@@ -24,7 +24,7 @@ struct DeviceSupervisionView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button(.done) {
+                        Button("Done") {
                             dismiss()
                         }
                     }

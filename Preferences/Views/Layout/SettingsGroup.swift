@@ -10,7 +10,10 @@ struct SettingsGroup: View {
     @AppStorage("AirplaneMode") private var airplaneModeEnabled = false
     @AppStorage("WiFi") private var wifiEnabled = true
     @AppStorage("Bluetooth") private var bluetoothEnabled = true
+    @AppStorage("VPN") private var vpnEnabled = true
+    @AppStorage("wifi.connected") private var connectedWiFiSSID: String?
     @Environment(PrimarySettingsListModel.self) private var model
+    @Environment(SettingsStore.self) private var store
     @State private var showingSignInError = false
     @State private var showingSignInSheet = false
     let group: [SettingsItem]
@@ -35,27 +38,33 @@ struct SettingsGroup: View {
         Section {
             ForEach(group) { setting in
                 if setting.type == .iCloud {
-                    Button {
-                        if model.isConnected {
-                            showingSignInSheet.toggle()
-                        } else {
-                            SettingsLogger.info("Presenting Network Alert.")
-                            showingSignInError.toggle()
-                        }
-                    } label: {
-                        NavigationLink {} label: {
+                    if store.account != nil {
+                        NavigationLink {
+                            AppleAccountView()
+                        } label: {
                             SLabel(setting.title, icon: setting.icon)
                         }
-                        .navigationLinkIndicatorVisibility(UIDevice.iPad && !model.isCompact ? .hidden : .visible)
-                    }
-                    .padding(.vertical, -5)
-                    .alert(.connectToTheInternetToSignInToYourDevice, isPresented: $showingSignInError) {
-                        Button(.ok) {}
-                    }
-                    .sheet(isPresented: $showingSignInSheet) {
-                        NavigationStack {
-                            SelectSignInOptionView()
-                                .interactiveDismissDisabled()
+                        .padding(.vertical, -5)
+                    } else {
+                        Button {
+                            if model.isConnected {
+                                showingSignInSheet.toggle()
+                            } else {
+                                SettingsLogger.info("Presenting Network Alert.")
+                                showingSignInError.toggle()
+                            }
+                        } label: {
+                            SLabel(setting.title, icon: setting.icon)
+                        }
+                        .padding(.vertical, -5)
+                        .alert("Connect to the Internet to sign in to your device.", isPresented: $showingSignInError) {
+                            Button("OK") {}
+                        }
+                        .sheet(isPresented: $showingSignInSheet) {
+                            NavigationStack {
+                                SelectSignInOptionView()
+                                    .interactiveDismissDisabled()
+                            }
                         }
                     }
                 } else if requiredCapabilities(capabilities: setting.capabilities) {
@@ -125,11 +134,14 @@ struct SettingsGroup: View {
     private func status(for setting: SettingsItem) -> String {
         switch setting.type {
         case .wifi:
-            return (wifiEnabled && !airplaneModeEnabled) ? "Not Connected" : "Off"
+            if airplaneModeEnabled || !store.wifiEnabled { return "Off" }
+            return connectedWiFiSSID ?? "Not Connected"
         case .bluetooth:
             return bluetoothEnabled ? "On" : "Off"
         case .cellular:
             return airplaneModeEnabled ? "Airplane Mode" : ""
+        case .vpn:
+            return vpnEnabled ? "Connected" : "Off"
         default:
             return ""
         }
@@ -237,4 +249,5 @@ private struct listRowBackgroundEffect: ViewModifier {
 #Preview {
     ContentView()
         .environment(PrimarySettingsListModel())
+        .environment(SettingsStore.shared)
 }

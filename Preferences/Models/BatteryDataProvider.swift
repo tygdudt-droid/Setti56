@@ -91,7 +91,7 @@ final class BatteryDataProvider {
             let date = cal.startOfDay(for: cal.date(byAdding: .day, value: -d, to: now) ?? now)
             days.append(BatteryDay(date: date,
                                    percentUsed: Int.random(in: 45...130, using: &rng),
-                                   screenOnMinutesToday(&rng),
+                                   screenOnMinutes: Int.random(in: 120...420, using: &rng),
                                    screenOffMinutes: Int.random(in: 60...420, using: &rng),
                                    apps: makeApps(&rng)))
         }
@@ -100,12 +100,6 @@ final class BatteryDataProvider {
     }
 }
 
-private extension BatteryDay {
-    init(date: Date, percentUsed: Int, _ screenOn: Int, screenOffMinutes: Int, apps: [AppBatteryUsage]) {
-        self.init(date: date, percentUsed: percentUsed, screenOnMinutes: screenOn, screenOffMinutes: screenOffMinutes, apps: apps)
-    }
-}
-private func screenOnMinutesToday(_ rng: inout SeededGenerator) -> Int { Int.random(in: 120...420, using: &rng) }
 
 extension Array where Element == BatterySample {
     func nearest(to date: Date) -> BatterySample? {

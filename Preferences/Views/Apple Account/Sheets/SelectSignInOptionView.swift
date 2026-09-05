@@ -10,6 +10,7 @@ import SwiftUI
 struct SelectSignInOptionView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
+    @Environment(SettingsStore.self) private var store
     @State private var showingAlert = false
     let path = "/System/Library/PrivateFrameworks/AppleIDSetup.framework"
     
@@ -70,6 +71,10 @@ struct SelectSignInOptionView: View {
         .background(colorScheme == .light ? .white : Color(UIColor.systemBackground))
         .scrollContentBackground(.hidden)
         .contentMargins(.horizontal, UIDevice.iPad ? 50 : 30, for: .scrollContent)
+        .onChange(of: store.account) { _, account in
+            // A completed sign-in anywhere in the flow closes the whole sheet.
+            if account != nil { dismiss() }
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button(role: .close) {

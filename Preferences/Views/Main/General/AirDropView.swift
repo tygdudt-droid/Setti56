@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct AirDropView: View {
-    @AppStorage("AirDropSelection") private var selection = "Receiving Off"
+    @AppStorage("AirDropSelection") private var selection = "Contacts Only"
     @AppStorage("AirDropNearbySharing") private var nearbySharingEnabled = true
     @AppStorage("AirDropCellularUsage") private var cellularUsageEnabled = true
     @State private var showingSheet = false
