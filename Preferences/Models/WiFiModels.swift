@@ -19,6 +19,7 @@ struct MockWiFiNetwork: Identifiable, Hashable, Codable {
             }
         }
         var isSecured: Bool { self != .none }
+        var isWeak: Bool { self == .wpa2 }
     }
 }
 
@@ -31,7 +32,7 @@ final class WiFiEngine {
     let store = SettingsStore.shared
 
     static let pool: [MockWiFiNetwork] = [
-        MockWiFiNetwork(ssid: "Home-5G", security: .wpa3, signal: 3, isHotspot: false),
+        MockWiFiNetwork(ssid: "Home-5G", security: .wpa2, signal: 3, isHotspot: false),
         MockWiFiNetwork(ssid: "Home", security: .wpa2, signal: 3, isHotspot: false),
         MockWiFiNetwork(ssid: "xfinitywifi", security: .none, signal: 2, isHotspot: false),
         MockWiFiNetwork(ssid: "Starbucks WiFi", security: .none, signal: 1, isHotspot: false),

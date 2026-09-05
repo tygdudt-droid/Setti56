@@ -4,7 +4,8 @@ struct NetworkRow: View {
     enum State { case idle, connected, joining }
     let network: MockWiFiNetwork
     let state: State
-    var onTap: () -> Void
+    var subtitle: String = ""
+    var onTap: () -> Void = {}
 
     @SwiftUI.State private var showDetail = false
 
@@ -18,7 +19,12 @@ struct NetworkRow: View {
                 }
             }
             .frame(width: 20)
-            Text(network.ssid)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(network.ssid)
+                if !subtitle.isEmpty {
+                    Text(subtitle).font(.footnote).foregroundStyle(.secondary)
+                }
+            }
             Spacer()
             HStack(spacing: 10) {
                 if network.security.isSecured { Image(systemName: "lock.fill") }

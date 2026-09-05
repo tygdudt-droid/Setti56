@@ -49,7 +49,7 @@ struct ConfigureIPView: View {
                     // MARK: IP Address
                     HStack {
                         Text("kWFLocSettingsIPV4AddressCell".localized(path: path, table: table))
-                        TextField(clientID, text: $clientID, prompt: Text("0.0.0.0"))
+                        TextField(IPAddress, text: $IPAddress, prompt: Text("0.0.0.0"))
                             .focused($focusedIP)
                             .onAppear {
                                 focusedIP = true

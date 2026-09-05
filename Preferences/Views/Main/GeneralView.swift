@@ -52,14 +52,14 @@ struct GeneralView: View {
                     )
                 }
             }
-            
-            if !UIDevice.IsSimulator {
-                Section {
-                    SLink(
-                        "AIRDROP".localized(path: path, table: table),
-                        icon: "com.apple.graphic-icon.airdrop",
-                        destination: AirDropView()
-                    )
+
+            Section {
+                SLink(
+                    "AIRDROP".localized(path: path, table: table),
+                    icon: "com.apple.graphic-icon.airdrop",
+                    destination: AirDropView()
+                )
+                if !UIDevice.IsSimulator {
                     SLink(
                         "CONTINUITY".localized(path: path, table: table),
                         icon: "com.apple.graphic-icon.airplay-video"
