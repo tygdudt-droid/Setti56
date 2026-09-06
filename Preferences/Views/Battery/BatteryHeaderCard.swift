@@ -1,44 +1,98 @@
 import SwiftUI
 
+/// Top card of Settings > Battery: big percentage, ⓘ button, last-charge
+/// line and the level track.
 struct BatteryHeaderCard: View {
     let data: BatteryDataProvider
-
-    private var sentence: String {
-        let diff = data.todayUsagePercent - data.dailyAveragePercent
-        if abs(diff) <= 8 { return "Battery usage is similar to your typical usage." }
-        return diff > 0 ? "Battery usage is higher than your typical usage." : "Battery usage is lower than your typical usage."
-    }
+    @State private var showingInfo = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("\(data.currentLevel)%").font(.system(size: 44, weight: .semibold, design: .rounded))
-                Image(systemName: "battery.100percent").font(.title2).foregroundStyle(.green)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top) {
+                HStack(alignment: .firstTextBaseline, spacing: 1) {
+                    Text("\(data.currentLevel)")
+                        .font(.system(size: 34, weight: .bold))
+                    Text("%")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
+                Button { showingInfo = true } label: {
+                    Image(systemName: "info.circle.fill")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .symbolRenderingMode(.hierarchical)
+                }
+                .buttonStyle(.plain)
             }
-            Text("Charged to \(data.lastChargedTo)% · \(data.lastChargedAt.formatted(date: .omitted, time: .shortened))")
-                .font(.footnote).foregroundStyle(.secondary)
 
-            VStack(alignment: .leading, spacing: 8) {
-                bar("Today", value: data.todayUsagePercent, max: 130, color: .green)
-                bar("Daily average", value: data.dailyAveragePercent, max: 130, color: .secondary.opacity(0.35))
-                Text(sentence).font(.footnote).foregroundStyle(.secondary).padding(.top, 2)
-            }
-            .padding(14)
-            .glassCard(cornerRadius: 16)
+            Text("Last Charged to \(data.lastChargedTo)%: \(data.lastChargedAgo)")
+                .padding(.top, 4)
+
+            levelTrack
+                .padding(.top, 14)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 8)
+        .padding(.vertical, 4)
+        .alert("Battery Level", isPresented: $showingInfo) {
+            Button("OK") {}
+        } message: {
+            Text("The bar shows the current charge level. \(MockDevice.current.deviceTypeName) was last charged to \(data.lastChargedTo)% \(data.lastChargedAgo).")
+        }
     }
 
-    private func bar(_ label: String, value: Int, max: Int, color: some ShapeStyle) -> some View {
-        HStack(spacing: 10) {
-            Text(label).font(.footnote).frame(width: 96, alignment: .leading)
-            GeometryReader { g in
-                Capsule().fill(color).frame(width: g.size.width * CGFloat(value) / CGFloat(max))
+    private var levelTrack: some View {
+        GeometryReader { geo in
+            let filled = geo.size.width * CGFloat(data.currentLevel) / 100
+            HStack(spacing: 0) {
+                Rectangle().fill(Color(white: 0.55)).frame(width: filled)
+                Rectangle().fill(Color(white: 0.34))
             }
-            .frame(height: 10)
-            Text("\(value)%").font(.footnote.monospacedDigit()).frame(width: 44, alignment: .trailing)
+            .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+        }
+        .frame(height: 6)
+    }
+}
+
+/// The "Daily Usage" card body shared by Battery and Battery Usage:
+/// the sentence, Average / Today figures, chart and legend.
+struct BatteryDailyUsageCard: View {
+    let data: BatteryDataProvider
+    /// Full report style (percent axis labels, date sub-labels, callout).
+    var detailed = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(detailed ? String(data.usageSentence.dropLast()) : data.usageSentence)
+                .padding(.bottom, detailed ? 0 : 14)
+
+            if !detailed {
+                Divider()
+                    .padding(.bottom, 14)
+                HStack(alignment: .top, spacing: 0) {
+                    figure("Average", "\(data.averagePercent)", color: .primary, labelColor: .secondary)
+                        .frame(width: 128, alignment: .leading)
+                    figure("Today", "\(data.todayPercent)", color: BatteryPalette.today, labelColor: BatteryPalette.today)
+                    Spacer()
+                }
+                .padding(.bottom, 10)
+            }
+
+            BatteryDailyUsageChart(days: data.days, average: data.averagePercent, detailed: detailed)
+                .padding(.top, detailed ? 46 : 0)
+
+            BatteryUsageLegend()
+                .padding(.top, 12)
+        }
+    }
+
+    private func figure(_ title: String, _ value: String, color: Color, labelColor: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).foregroundStyle(labelColor)
+            HStack(alignment: .firstTextBaseline, spacing: 1) {
+                Text(value).font(.system(size: 30, weight: .regular))
+                Text("%").font(.system(size: 18, weight: .regular))
+            }
+            .foregroundStyle(color)
         }
     }
 }

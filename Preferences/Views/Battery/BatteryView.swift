@@ -1,162 +1,215 @@
 import SwiftUI
 
+/// Settings > Battery (iPadOS 26): level card, Daily Usage card with the
+/// week chart and the top App and System Activity rows, then Battery Health,
+/// Battery Percentage and Low Power Mode.
 struct BatteryView: View {
     @Environment(SettingsStore.self) private var store
     @State private var data = BatteryDataProvider.shared
-    @State private var range = 0                     // 0 = Last 24 Hours, 1 = Last 10 Days
-    @State private var selectedTime: Date?
-    @State private var selectedDay: Date?
-    @State private var showActivity = false
-
-    private var apps: [AppBatteryUsage] {
-        if range == 1, let day = data.last10d.first(where: { Calendar.current.isDate($0.date, inSameDayAs: selectedDay ?? .distantPast) }) {
-            return day.apps
-        }
-        return data.todayApps
-    }
 
     var body: some View {
         @Bindable var store = store
-        List {
-            Section { BatteryHeaderCard(data: data) }
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
-
+        CustomList(title: "Battery", topPadding: true) {
             Section {
-                Toggle("Low Power Mode", isOn: $store.lowPowerMode)
-                if MockDevice.current.supportsAdaptivePower {
-                    Toggle("Adaptive Power", isOn: $store.adaptivePower)
-                }
-            } header: { Text("Power Mode") } footer: {
-                Text(MockDevice.current.supportsAdaptivePower
-                     ? "Adaptive Power makes small performance adjustments when battery usage is higher than usual, including slightly lowering display brightness or allowing some activities to take a little longer."
-                     : "Low Power Mode temporarily reduces background activity like downloads and mail fetch until you can fully charge your \(MockDevice.current.deviceTypeName).")
+                BatteryHeaderCard(data: data)
             }
 
             Section {
-                NavigationLink { ChargeLimitView() } label: { LabeledContent("Charge Limit", value: "\(store.chargeLimit)%") }
-                NavigationLink { BatteryHealthView(data: data) } label: {
-                    LabeledContent("Battery Health", value: data.maximumCapacity >= 80 ? "Normal" : "Service")
-                }
-            } header: { Text("Charging") } footer: {
-                Text("Last charged to \(data.lastChargedTo)% \(data.lastChargedAt.formatted(date: .omitted, time: .shortened)).")
-            }
+                BatteryDailyUsageCard(data: data)
+                    .padding(.vertical, 6)
 
-            Section { Toggle("Battery Percentage", isOn: $store.batteryPercentage) }
+                Text("App and System Activity")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+                    .listRowSeparator(.hidden, edges: .top)
 
-            Section {
-                Picker("", selection: $range) {
-                    Text("Last 24 Hours").tag(0)
-                    Text("Last 10 Days").tag(1)
-                }
-                .pickerStyle(.segmented)
-                .listRowSeparator(.hidden)
-
-                Group {
-                    if range == 0 {
-                        BatteryLevelChart(samples: data.last24h, selection: $selectedTime)
-                    } else {
-                        BatteryTenDayChart(days: data.last10d, selection: $selectedDay)
+                ForEach(data.summaryUsage) { usage in
+                    RouteLink("Battery/App/\(usage.id)") {
+                        BatteryAppDetailView(usage: usage)
+                    } label: {
+                        BatteryAppRow(usage: usage)
                     }
                 }
-                .listRowSeparator(.hidden)
-                BatteryLegend()
-                    .listRowSeparator(.hidden)
-            } header: { Text(range == 0 ? "Battery Level" : "Battery Usage") }
 
-            Section {
-                LabeledContent("Screen On", value: minutesLabel(range == 0 ? data.screenOnMinutesToday : (selectedDayData?.screenOnMinutes ?? data.screenOnMinutesToday)))
-                LabeledContent("Screen Off", value: minutesLabel(range == 0 ? data.screenOffMinutesToday : (selectedDayData?.screenOffMinutes ?? data.screenOffMinutesToday)))
-            } header: { Text(range == 0 ? "Screen Usage" : "Average Screen Usage") }
-
-            Section {
-                Toggle("Show Activity", isOn: $showActivity)
-                ForEach(apps) { app in BatteryAppRow(usage: app, showActivity: showActivity) }
+                RouteLink("Battery/Usage") {
+                    BatteryUsageView(data: data)
+                } label: {
+                    Text("View All Battery Usage")
+                }
             } header: {
-                HStack {
-                    Text(showActivity ? "Activity by App" : "Battery Usage by App")
-                    Spacer()
-                    if range == 1, let d = selectedDay { Text(d.formatted(.dateTime.weekday(.abbreviated))).textCase(nil) }
-                }
+                Text("Daily Usage")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+                    .textCase(nil)
             }
 
-            Section("Insights & Suggestions") {
-                HStack(spacing: 12) {
-                    Image(systemName: "sun.max.fill").foregroundStyle(.white).frame(width: 29, height: 29)
-                        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(.blue))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Enable Auto-Brightness")
-                        Text("Display brightness accounted for a large portion of your battery usage.").font(.footnote).foregroundStyle(.secondary)
+            Section {
+                RouteLink("Battery/Health") {
+                    BatteryHealthView(data: data)
+                } label: {
+                    LabeledContent("Battery Health") {
+                        Text(data.healthStatus).foregroundStyle(.secondary)
+                    }
+                }
+                Toggle("Battery Percentage", isOn: $store.batteryPercentage)
+                Toggle("Low Power Mode", isOn: $store.lowPowerMode)
+            } footer: {
+                Text("\(MockDevice.current.deviceTypeName) will temporarily reduce some background activities, processing speed, and display brightness, and limit certain features such as iCloud syncing, mail fetch, and more.")
+            }
+        }
+    }
+}
+
+/// Settings > Battery > View All Battery Usage
+struct BatteryUsageView: View {
+    let data: BatteryDataProvider
+    @State private var showAll = false
+
+    var body: some View {
+        CustomList(title: "Battery Usage", topPadding: true) {
+            Section {
+                BatteryDailyUsageCard(data: data, detailed: true)
+                    .padding(.top, 6)
+
+                BatteryHourlyChart(hours: data.hours, sessions: data.chargingSessions)
+                    .padding(.top, 26)
+                    .padding(.bottom, 6)
+
+                HStack(alignment: .top, spacing: 0) {
+                    screenFigure("Screen On", data.screenOnMinutes)
+                        .frame(width: 300, alignment: .leading)
+                    screenFigure("Screen Off", data.screenOffMinutes)
+                    Spacer()
+                }
+                .padding(.bottom, 6)
+            } header: {
+                Text("Daily Usage")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+                    .textCase(nil)
+            }
+
+            Section {
+                Text("Battery Usage by App")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .listRowSeparator(.hidden)
+
+                ForEach(showAll ? data.appUsage : Array(data.appUsage.prefix(5))) { usage in
+                    RouteLink("BatteryUsage/App/\(usage.id)") {
+                        BatteryAppDetailView(usage: usage)
+                    } label: {
+                        BatteryAppRow(usage: usage)
+                    }
+                }
+
+                Button(showAll ? "Show Less" : "Show More") {
+                    withAnimation { showAll.toggle() }
+                }
+            } header: {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("App and System Activity Usage")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Text("Get an idea of how much the battery is used by app and system activity throughout the day.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .textCase(nil)
+                .padding(.bottom, 4)
+            }
+
+            Section {
+                Text("Other Battery Usage")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .listRowSeparator(.hidden)
+
+                ForEach(data.otherUsage) { usage in
+                    RouteLink("BatteryUsage/Other/\(usage.id)") {
+                        BatteryAppDetailView(usage: usage)
+                    } label: {
+                        BatteryAppRow(usage: usage)
                     }
                 }
             }
         }
-        .navigationTitle("Battery")
-        .settingsReadableWidth()
-        .navigationBarTitleDisplayMode(.inline)
     }
 
-    private var selectedDayData: BatteryDay? {
-        guard let selectedDay else { return nil }
-        return data.last10d.first { Calendar.current.isDate($0.date, inSameDayAs: selectedDay) }
+    private func screenFigure(_ title: String, _ minutes: Int) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).foregroundStyle(.secondary)
+            Text(minutesLabel(minutes)).font(.system(size: 24, weight: .regular))
+        }
     }
 }
 
-struct BatteryAppRow: View {
-    let usage: AppBatteryUsage
-    let showActivity: Bool
+/// Settings > Battery > [App]
+struct BatteryAppDetailView: View {
+    let usage: BatteryAppUsage
+
     var body: some View {
-        HStack(spacing: 12) {
-            AppIconView(app: usage.app, side: 29)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(usage.app.name)
-                if usage.backgroundMinutes > 0 {
-                    Text("Background Activity").font(.footnote).foregroundStyle(.secondary)
+        CustomList(title: usage.name, topPadding: true) {
+            Section {
+                HStack(spacing: 14) {
+                    StorageIconView(icon: usage.icon)
+                        .scaleEffect(2)
+                        .frame(width: 58, height: 58)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(usage.name).font(.title3.weight(.semibold))
+                        Text("\(usage.percent)% of battery").foregroundStyle(.secondary)
+                    }
                 }
-            }
-            Spacer()
-            if showActivity {
-                Text(minutesLabel(usage.screenOnMinutes + usage.backgroundMinutes)).foregroundStyle(.secondary)
-            } else {
-                Text("\(Int((usage.energyShare * 100).rounded()))%").foregroundStyle(.secondary)
+                .padding(.vertical, 4)
+                if let onScreen = usage.onScreen {
+                    LabeledContent("On Screen", value: minutesLabel(onScreen))
+                }
+                if let background = usage.background {
+                    LabeledContent("Background", value: minutesLabel(background))
+                }
+            } footer: {
+                if let note = usage.note { Text(note) }
             }
         }
     }
 }
 
-struct BatteryLegend: View {
-    var body: some View {
-        HStack(spacing: 16) {
-            item(.green, "Battery Level")
-            item(.green.opacity(0.35), "Charging")
-            item(.yellow, "Low Power Mode")
-        }
-        .font(.caption).foregroundStyle(.secondary)
-    }
-    private func item(_ c: Color, _ t: String) -> some View {
-        HStack(spacing: 4) { RoundedRectangle(cornerRadius: 2).fill(c).frame(width: 10, height: 10); Text(t) }
-    }
-}
-
+/// Settings > Battery > Battery Health > Charge Limit (kept for the mock
+/// charge-limit slider used elsewhere).
 struct ChargeLimitView: View {
     @Environment(SettingsStore.self) private var store
+
     var body: some View {
         @Bindable var store = store
-        List {
+        CustomList(title: "Charge Limit", topPadding: true) {
             Section {
-                VStack(alignment: .leading) {
+                VStack(alignment: .leading, spacing: 10) {
                     Text("\(store.chargeLimit)%").font(.title.bold())
-                    Slider(value: Binding(get: { Double(store.chargeLimit) }, set: { store.chargeLimit = Int(($0 / 5).rounded() * 5) }), in: 80...100, step: 5)
+                    Slider(
+                        value: Binding(
+                            get: { Double(store.chargeLimit) },
+                            set: { store.chargeLimit = Int(($0 / 5).rounded() * 5) }
+                        ),
+                        in: 80...100, step: 5
+                    )
                 }
+                .padding(.vertical, 6)
             } footer: {
                 Text("Choose a charge limit between 80% and 100%. Limiting charge to a lower percentage can help improve battery lifespan.")
             }
-            Section { Toggle("Optimized Battery Charging", isOn: $store.optimizedCharging) } footer: {
+            Section {
+                Toggle("Optimized Battery Charging", isOn: $store.optimizedCharging)
+            } footer: {
                 Text("To reduce battery aging, \(MockDevice.current.deviceTypeName) learns from your daily charging routine so it can wait to finish charging past \(store.chargeLimit)% until you need to use it.")
             }
         }
-        .navigationTitle("Charge Limit")
-        .settingsReadableWidth()
-        .navigationBarTitleDisplayMode(.inline)
     }
+}
+
+#Preview {
+    NavigationStack {
+        BatteryView()
+    }
+    .environment(SettingsStore.shared)
+    .environment(PrimarySettingsListModel())
 }
