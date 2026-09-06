@@ -39,11 +39,14 @@ struct SettingsGroup: View {
             ForEach(group) { setting in
                 if setting.type == .iCloud {
                     if store.account != nil {
-                        NavigationLink {
-                            AppleAccountView()
+                        Button {
+                            model.selection = setting
+                            model.path = []
                         } label: {
                             SLabel(setting.title, icon: setting.icon)
                         }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.primary)
                         .padding(.vertical, -5)
                     } else {
                         Button {

@@ -19,7 +19,7 @@ struct AppleAccountView: View {
                         }
                         .buttonStyle(.plain)
                         Text(account.fullName).font(.title2.weight(.semibold))
-                        Text(account.email).font(.subheadline).foregroundStyle(.secondary)
+                        Text(account.email).font(.callout).foregroundStyle(.secondary)
                     }
                     .frame(maxWidth: .infinity)
                     .listRowBackground(Color.clear)
@@ -103,6 +103,19 @@ struct AppleAccountView: View {
                 Spacer()
                 if let value { Text(value).foregroundStyle(.secondary) }
             }
+        }
+    }
+}
+
+/// Destination for the iCloud row in the main list.
+struct ICloudDestinationView: View {
+    @Environment(SettingsStore.self) private var store
+
+    var body: some View {
+        if store.account != nil {
+            AppleAccountView()
+        } else {
+            ContentUnavailableView("Not Signed In", systemImage: "person.crop.circle.badge.xmark")
         }
     }
 }

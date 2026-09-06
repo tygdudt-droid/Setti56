@@ -19,17 +19,13 @@ struct AboutView: View {
 
     var body: some View {
         CustomList(title: "About", topPadding: true) {
-            // MARK: Name (own card, like iOS 26)
+            // MARK: Name + Device identity (one card)
             Section {
                 NavigationLink {
                     NameView()
                 } label: {
                     LabeledContent("Name", value: storedDeviceName)
                 }
-            }
-
-            // MARK: Device identity
-            Section {
                 NavigationLink {
                     ControllerBridgeView(
                         "/System/Library/PrivateFrameworks/Settings/GeneralSettingsUI.framework/GeneralSettingsUI",
@@ -62,7 +58,7 @@ struct AboutView: View {
                 NavigationLink {
                     AppleCareWarrantyView()
                 } label: {
-                    LabeledContent("Coverage", value: "Expired")
+                    Text("Coverage Expired")
                 }
             }
 
@@ -82,6 +78,9 @@ struct AboutView: View {
                     .textSelection(.enabled)
                 LabeledContent("Bluetooth", value: identity.bluetoothAddress)
                     .textSelection(.enabled)
+                NavigationLink("SEID") {
+                    SEIDView()
+                }
             }
 
             // MARK: Cellular identifiers (cellular devices only)

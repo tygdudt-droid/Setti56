@@ -407,7 +407,7 @@ final class PrimarySettingsListModel {
             SettingsItem(
                 type: .iCloud,
                 icon: "com.apple.application-icon.icloud",
-                destination: AnyView(EmptyView())
+                destination: AnyView(ICloudDestinationView())
             ),
             SettingsItem(
                 type: .walletAndApplePay,
