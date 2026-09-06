@@ -437,7 +437,7 @@ struct StorageIconView: View {
     var body: some View {
         switch icon {
         case .app(let bundleID, let symbol, let tint):
-            if let bundleID, let image = UIImage.icon(forBundleID: bundleID) {
+            if let bundleID, let image = UIImage.installedAppIcon(forBundleID: bundleID) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()

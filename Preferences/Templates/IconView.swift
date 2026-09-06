@@ -97,8 +97,10 @@ struct IconView: View {
     var body: some View {
         if knownUTIPrefix, let graphicIcon = UIImage.icon(forUTI: icon) {
             Image(uiImage: graphicIcon)
-        } else if !knownUTIPrefix, let asset = UIImage.icon(forBundleID: icon) {
+        } else if !knownUTIPrefix, let asset = UIImage.installedAppIcon(forBundleID: icon) {
             Image(uiImage: asset)
+        } else if icon == "com.apple.Passbook" {
+            WalletIconTile()
         } else if let symbol = fallbackSymbol {
             // Settings-style tinted glyph for known icons.
             ZStack {
@@ -122,6 +124,35 @@ struct IconView: View {
             .frame(width: 29, height: 29)
             .accessibilityHidden(true)
         }
+    }
+}
+
+/// Wallet app icon look-alike (black tile, stacked colored cards) for
+/// devices where the Wallet app is not installed.
+struct WalletIconTile: View {
+    var side: CGFloat = 29
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: side * 0.2237, style: .continuous)
+                .fill(Color.black)
+            VStack(spacing: -side * 0.13) {
+                card(Color(red: 0.98, green: 0.30, blue: 0.30))
+                card(Color(red: 1.00, green: 0.62, blue: 0.20))
+                card(Color(red: 0.30, green: 0.80, blue: 0.40))
+                card(Color(red: 0.25, green: 0.55, blue: 1.00))
+            }
+            .frame(width: side * 0.62)
+            .offset(y: side * 0.02)
+        }
+        .frame(width: side, height: side)
+        .accessibilityLabel("Wallet")
+    }
+
+    private func card(_ color: Color) -> some View {
+        RoundedRectangle(cornerRadius: side * 0.07, style: .continuous)
+            .fill(color)
+            .frame(height: side * 0.26)
     }
 }
 

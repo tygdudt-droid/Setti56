@@ -7,115 +7,134 @@
 
 import SwiftUI
 
+/// iPadOS 26 layout: Automatic / Manual card, then "DNS Servers" and
+/// "Search Domains" cards. In Manual mode each entry is an inline editable
+/// row with a red delete control, and the green "Add …" row appends a new
+/// empty row and focuses it (no alert), exactly like iOS.
 struct ConfigureDNSView: View {
     @Binding var selected: String
     @State private var isAutomatic = true
     @State private var dnsServers: [DNSServer] = []
     @State private var searchDomains: [SearchDomain] = []
-    @State private var addServerSheet = false
-    @State private var addDomainSheet = false
-    @State private var newServer = ""
-    @State private var newDomain = ""
+    @FocusState private var focusedServer: UUID?
+    @FocusState private var focusedDomain: UUID?
 
     var body: some View {
         CustomList(title: "Configure DNS", topPadding: true) {
             Section {
-                Button {
-                    isAutomatic = true
-                } label: {
-                    HStack {
-                        Text("Automatic").foregroundStyle(.primary)
-                        Spacer()
-                        if isAutomatic { Image(systemName: "checkmark").foregroundStyle(.blue) }
-                    }
-                }
-                Button {
-                    isAutomatic = false
-                } label: {
-                    HStack {
-                        Text("Manual").foregroundStyle(.primary)
-                        Spacer()
-                        if !isAutomatic { Image(systemName: "checkmark").foregroundStyle(.blue) }
-                    }
-                }
+                modeRow("Automatic", selected: isAutomatic) { isAutomatic = true }
+                modeRow("Manual", selected: !isAutomatic) { isAutomatic = false }
             }
 
-            Section(header: Text("DNS Servers").textCase(nil)) {
+            Section {
                 if !isAutomatic {
                     ForEach($dnsServers) { $server in
-                        TextField("Server", text: $server.server)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .keyboardType(.numbersAndPunctuation)
-                    }
-                    .onDelete { dnsServers.remove(atOffsets: $0) }
-
-                    Button {
-                        addServerSheet = true
-                    } label: {
-                        HStack {
-                            Image(systemName: "plus.circle.fill")
-                                .foregroundStyle(.green)
-                            Text("Add Server")
+                        HStack(spacing: 18) {
+                            deleteButton { dnsServers.removeAll { $0.id == server.id } }
+                            TextField("DNS Server", text: $server.server)
+                                .focused($focusedServer, equals: server.id)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .keyboardType(.numbersAndPunctuation)
                         }
                     }
+                    addRow("Add Server") {
+                        let s = DNSServer(server: "")
+                        dnsServers.append(s)
+                        focusedServer = s.id
+                    }
+                } else {
+                    Text("Automatically obtained from the router.")
+                        .foregroundStyle(.secondary)
                 }
+            } header: {
+                sectionHeader("DNS Servers")
             }
 
-            Section(header: Text("Search Domains").textCase(nil)) {
+            Section {
                 if !isAutomatic {
                     ForEach($searchDomains) { $domain in
-                        TextField("Domain", text: $domain.domain)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                    }
-                    .onDelete { searchDomains.remove(atOffsets: $0) }
-
-                    Button {
-                        addDomainSheet = true
-                    } label: {
-                        HStack {
-                            Image(systemName: "plus.circle.fill")
-                                .foregroundStyle(.green)
-                            Text("Add Search Domain")
+                        HStack(spacing: 18) {
+                            deleteButton { searchDomains.removeAll { $0.id == domain.id } }
+                            TextField("Search Domain", text: $domain.domain)
+                                .focused($focusedDomain, equals: domain.id)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .keyboardType(.URL)
                         }
                     }
+                    addRow("Add Search Domain") {
+                        let d = SearchDomain(domain: "")
+                        searchDomains.append(d)
+                        focusedDomain = d.id
+                    }
+                } else {
+                    Text("Automatically obtained from the router.")
+                        .foregroundStyle(.secondary)
                 }
+            } header: {
+                sectionHeader("Search Domains")
             }
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Save") {
+                    dnsServers.removeAll { $0.server.trimmingCharacters(in: .whitespaces).isEmpty }
+                    searchDomains.removeAll { $0.domain.trimmingCharacters(in: .whitespaces).isEmpty }
                     selected = isAutomatic ? "kWFLocSettingsDNSSettingsAutomatic" : "kWFLocSettingsDNSSettingsManual"
                 }
-                .fontWeight(.semibold)
             }
         }
         .onAppear {
             isAutomatic = !selected.contains("Manual")
         }
-        .alert("Add Server", isPresented: $addServerSheet) {
-            TextField("DNS Server", text: $newServer)
-                .keyboardType(.numbersAndPunctuation)
-                .textInputAutocapitalization(.never)
-            Button("Add") {
-                let v = newServer.trimmingCharacters(in: .whitespaces)
-                if !v.isEmpty { dnsServers.append(DNSServer(server: v)) }
-                newServer = ""
+    }
+
+    // MARK: Pieces
+
+    private func modeRow(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Text(title).foregroundStyle(.primary)
+                Spacer()
+                if selected {
+                    Image(systemName: "checkmark")
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(.blue)
+                }
             }
-            Button("Cancel", role: .cancel) { newServer = "" }
+            .contentShape(Rectangle())
         }
-        .alert("Add Search Domain", isPresented: $addDomainSheet) {
-            TextField("Domain", text: $newDomain)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            Button("Add") {
-                let v = newDomain.trimmingCharacters(in: .whitespaces)
-                if !v.isEmpty { searchDomains.append(SearchDomain(domain: v)) }
-                newDomain = ""
+    }
+
+    /// Green ⊕ + label, like the insert row in iOS grouped lists.
+    private func addRow(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 18) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundStyle(.white, .green)
+                Text(title).foregroundStyle(.primary)
             }
-            Button("Cancel", role: .cancel) { newDomain = "" }
+            .contentShape(Rectangle())
         }
+    }
+
+    /// Red ⊖ delete control at the leading edge of an editable row.
+    private func deleteButton(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "minus.circle.fill")
+                .font(.system(size: 22))
+                .foregroundStyle(.white, .red)
+        }
+        .buttonStyle(.borderless)
+    }
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.headline)
+            .foregroundStyle(.secondary)
+            .textCase(nil)
     }
 }
 

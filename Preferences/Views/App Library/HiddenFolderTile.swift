@@ -177,13 +177,13 @@ struct HiddenAppsView: View {
 
     // MARK: Card style (Storage)
     private var cardContent: some View {
-        CustomList(title: "Hidden Apps", topPadding: true) {
+        CustomList(title: "Hidden Apps", topPadding: true, readableWidth: false) {
             Section {
                 if hidden.isEmpty {
                     HiddenAppsEmptyState(showsDescription: true)
                         .frame(maxWidth: .infinity)
-                        .padding(.top, 32)
-                        .padding(.bottom, 56)
+                        .padding(.top, 26)
+                        .padding(.bottom, 40)
                 } else {
                     ForEach(hidden) { app in
                         RouteLink("HiddenApps/card/\(app.bundleID)") {
@@ -298,16 +298,16 @@ struct HiddenAppsEmptyState: View {
     var body: some View {
         VStack(spacing: 0) {
             Image(systemName: "square.stack.3d.up.slash")
-                .font(.system(size: 54, weight: .regular))
+                .font(.system(size: 56, weight: .regular))
                 .foregroundStyle(.secondary)
-                .padding(.bottom, 16)
+                .padding(.bottom, 14)
             Text("No Hidden Apps")
-                .font(.title.weight(.bold))
+                .font(.largeTitle.weight(.bold))
             if showsDescription {
                 Text("No hidden apps found.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .padding(.top, 6)
+                    .padding(.top, 4)
             }
         }
         .multilineTextAlignment(.center)
@@ -370,7 +370,7 @@ struct HiddenAppsRow<RowLabel: View>: View {
         guard store.requireAuthForHiddenApps else { push(); return }
         authenticating = true
         defer { authenticating = false }
-        switch await HiddenAppsAuth.authenticate(reason: "Unlock Hidden Apps") {
+        switch await HiddenAppsAuth.authenticate() {
         case .some(true):
             push()
         case .some(false):

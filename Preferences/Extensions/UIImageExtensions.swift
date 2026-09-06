@@ -45,4 +45,16 @@ extension UIImage {
         let image = UIImage.perform(selector, with: bundleID)
         return image?.takeUnretainedValue() as? UIImage
     }
+
+    /// PNG bytes of the generic template returned for an unknown bundle ID.
+    private static let templateIconData: Data? = icon(forBundleID: "com.example.not-installed.\(UUID().uuidString)")?.pngData()
+
+    /// Like `icon(forBundleID:)`, but returns nil instead of the blank
+    /// template when the app is not installed, so callers can draw their own
+    /// fallback.
+    static func installedAppIcon(forBundleID bundleID: String) -> UIImage? {
+        guard let image = icon(forBundleID: bundleID) else { return nil }
+        if let template = templateIconData, image.pngData() == template { return nil }
+        return image
+    }
 }

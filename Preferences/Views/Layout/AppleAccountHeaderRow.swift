@@ -30,7 +30,7 @@ struct AppleAccountHeaderRow: View {
                 NavigationLink {
                     AppleAccountView()
                 } label: {
-                    signedInLabel(account)
+                    signedInLabel(account, selected: false)
                 }
             } else {
                 Button {
@@ -41,16 +41,14 @@ struct AppleAccountHeaderRow: View {
                     }
                 } label: {
                     HStack {
-                        signedInLabel(account)
+                        // No chevron on iPad; selection tints the text blue.
+                        signedInLabel(account, selected: isSelected)
                         Spacer()
-                        Image(systemName: "chevron.forward")
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.tertiary)
                     }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.primary)
+                .foregroundStyle(isSelected ? .blue : .primary)
                 .accessibilityIdentifier("com.apple.settings.primaryAppleAccount")
                 .modifier(listRowBackgroundEffect(
                     isActive: UIDevice.iPad && !model.isCompact,
@@ -80,7 +78,7 @@ struct AppleAccountHeaderRow: View {
         }
     }
 
-    private func signedInLabel(_ account: MockAppleAccount) -> some View {
+    private func signedInLabel(_ account: MockAppleAccount, selected: Bool) -> some View {
         HStack(spacing: 14) {
             AvatarView(account: account, size: 60)
             VStack(alignment: .leading, spacing: 2) {
@@ -88,7 +86,7 @@ struct AppleAccountHeaderRow: View {
                     .font(.title2)
                 Text("Apple Account, iCloud, and more")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(selected ? AnyShapeStyle(.blue) : AnyShapeStyle(.secondary))
             }
         }
         .padding(.vertical, 6)

@@ -18,47 +18,55 @@ struct AppleAccountView: View {
         if let account = store.account {
             CustomList(title: "Apple Account", topPadding: true) {
                 Section {
-                    VStack(spacing: 10) {
+                    VStack(spacing: 0) {
                         PhotosPicker(selection: $photoItem, matching: .images) {
-                            AvatarView(account: account, size: 110)
+                            AvatarView(account: account, size: 96)
                         }
                         .buttonStyle(.plain)
-                        Text(account.fullName).font(.title2.weight(.semibold))
-                        Text(account.email).font(.callout).foregroundStyle(.secondary)
+                        Text(account.fullName)
+                            .font(.system(size: 34, weight: .bold))
+                            .padding(.top, 12)
+                        Text(account.email)
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 6)
                     }
                     .frame(maxWidth: .infinity)
+                    .padding(.top, 8)
+                    .padding(.bottom, 18)
                     .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
                 }
 
                 Section {
-                    row("Personal Information", "person.text.rectangle", .gray)
-                    row("Sign-In & Security", "lock.shield", .gray)
-                    row("Payment & Shipping", "creditcard", .gray)
-                    row("Subscriptions", "arrow.triangle.2.circlepath", .gray)
+                    row("Personal Information", .tile("person.text.rectangle.fill", "8E8E93"))
+                    row("Sign-In & Security", .tile("lock.shield.fill", "8E8E93"))
+                    row("Payment & Shipping", .tile("creditcard.fill", "8E8E93"))
+                    row("Subscriptions", .tile("arrow.triangle.2.circlepath.circle.fill", "8E8E93"))
                 }
 
                 Section {
-                    row("iCloud", "icloud.fill", .blue, value: "5 GB")
-                    row("Family", "person.2.fill", .blue, value: "Set Up")
-                    row("Find My", "location.fill", .green)
-                    row("Media & Purchases", "square.stack.3d.up.fill", .blue)
-                    row("Sign in with Apple", "apple.logo", .white, iconTint: .black)
+                    row("iCloud", .uti("com.apple.application-icon.icloud"), value: "5 GB")
+                    row("Family", .tile("person.2.fill", "2C7BE5"), value: "Set Up")
+                    row("Find My", .app("com.apple.findmy", "location.fill", "34C759"))
+                    row("Media & Purchases", .app("com.apple.AppStore", "square.stack.3d.up.fill", "1E90FF"))
+                    row("Sign in with Apple", .tile("apple.logo", "000000"))
                 }
 
-                Section(header: Text("Devices").textCase(nil)) {
+                // Devices: no header in iOS 26, device renders instead of glyphs.
+                Section {
                     let thisName = MockDevice.current.deviceName
                     let thisSubtitle = "This \(identity.modelName ?? MockDevice.current.modelName)"
                     RouteLink("AppleAccount/Device/this") {
                         DeviceDetailView(name: thisName, subtitle: thisSubtitle)
                     } label: {
-                        deviceLabel(symbol: MockDevice.current.isPad ? "ipad" : "iphone", name: thisName, subtitle: thisSubtitle)
+                        deviceLabel(kind: MockDevice.current.isPad ? .iPad : .iPhone, name: thisName, subtitle: thisSubtitle)
                     }
                     ForEach(account.devices) { d in
                         let subtitle = d.model.isEmpty ? d.kind.rawValue : d.model
                         RouteLink("AppleAccount/Device/\(d.name)") {
                             DeviceDetailView(name: d.name, subtitle: subtitle)
                         } label: {
-                            deviceLabel(symbol: d.kind.symbol, name: d.name, subtitle: subtitle)
+                            deviceLabel(kind: d.kind, name: d.name, subtitle: subtitle)
                         }
                     }
                 }
@@ -101,23 +109,44 @@ struct AppleAccountView: View {
         }
     }
 
-    private func deviceLabel(symbol: String, name: String, subtitle: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: symbol).font(.title2)
-            VStack(alignment: .leading) {
+    private func deviceLabel(kind: MockLinkedDevice.Kind, name: String, subtitle: String) -> some View {
+        HStack(spacing: 14) {
+            Group {
+                switch kind {
+                case .iPad: DeviceImageView(isPad: true, scale: 0.6)
+                case .iPhone: DeviceImageView(isPad: false, scale: 0.6)
+                default: Image(systemName: kind.symbol).font(.title2)
+                }
+            }
+            .frame(width: 34, height: 42)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(name)
                 Text(subtitle).font(.footnote).foregroundStyle(.secondary)
             }
         }
+        .padding(.vertical, 2)
     }
 
-    private func row(_ title: String, _ icon: String, _ color: Color, value: String? = nil, iconTint: Color = .white) -> some View {
+    /// Icon source for an Apple Account row.
+    enum RowIcon {
+        case tile(String, String)              // glyph + tint hex
+        case app(String, String, String)       // bundle ID, fallback glyph, tint
+        case uti(String)                       // Settings graphic / application icon UTI
+    }
+
+    private func row(_ title: String, _ icon: RowIcon, value: String? = nil) -> some View {
         RouteLink("AppleAccount/\(title)") {
-            ContentUnavailableView(title, systemImage: icon)
+            ContentUnavailableView(title, systemImage: "person.crop.circle")
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: icon).foregroundStyle(iconTint).frame(width: 29, height: 29)
-                    .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(color))
+                switch icon {
+                case .tile(let symbol, let tint):
+                    StorageIconView(icon: .app(bundleID: nil, symbol: symbol, tint: tint))
+                case .app(let bundle, let symbol, let tint):
+                    StorageIconView(icon: .app(bundleID: bundle, symbol: symbol, tint: tint))
+                case .uti(let uti):
+                    IconView(uti)
+                }
                 Text(title)
                 Spacer()
                 if let value { Text(value).foregroundStyle(.secondary) }
@@ -147,18 +176,19 @@ struct DeviceDetailView: View {
     private let identity = MockDeviceIdentity.stored
 
     var body: some View {
-        CustomList(title: "Device Info", topPadding: true) {
+        // topPadding false pulls the header up under the bar like iOS.
+        CustomList(title: "Device Info", topPadding: false) {
             Section {
-                VStack(spacing: 8) {
-                    Image(systemName: device.isPad ? "ipad.landscape" : "iphone.gen3")
-                        .font(.system(size: 52, weight: .light))
-                        .foregroundStyle(.primary)
-                    Text(name).font(.title3.weight(.semibold))
-                    Text(subtitle).font(.footnote).foregroundStyle(.secondary)
+                VStack(spacing: 5) {
+                    DeviceImageView(isPad: device.isPad)
+                        .padding(.bottom, 12)
+                    Text(name)
+                    Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+                .padding(.bottom, 10)
                 .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
             }
 
             Section {
@@ -168,7 +198,11 @@ struct DeviceDetailView: View {
                     LabeledContent {
                         Text("On").foregroundStyle(.secondary)
                     } label: {
-                        iconRow("Find My \(device.deviceTypeName)", "location.fill", .green)
+                        HStack(spacing: 12) {
+                            // Real Find My app icon on device.
+                            StorageIconView(icon: .app(bundleID: "com.apple.findmy", symbol: "location.fill", tint: "34C759"))
+                            Text("Find My \(device.deviceTypeName)")
+                        }
                     }
                 }
                 RouteLink("DeviceInfo/iCloudBackup") {
@@ -177,13 +211,26 @@ struct DeviceDetailView: View {
                     LabeledContent {
                         Text("On").foregroundStyle(.secondary)
                     } label: {
-                        iconRow("iCloud Backup", "arrow.triangle.2.circlepath", .teal)
+                        HStack(spacing: 12) {
+                            StorageIconView(icon: .app(bundleID: nil, symbol: "arrow.clockwise", tint: "2AA9F0"))
+                            Text("iCloud Backup")
+                        }
                     }
                 }
                 RouteLink("DeviceInfo/AppleCare") {
                     ContentUnavailableView("AppleCare & Warranty", systemImage: "apple.logo")
                 } label: {
-                    iconRowLink("AppleCare & Warranty", "apple.logo", .white, tint: .black)
+                    HStack(spacing: 12) {
+                        // White tile, red Apple logo — like iOS 26.
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 6.5, style: .continuous).fill(Color.white)
+                            Image(systemName: "apple.logo")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(Color(red: 0.93, green: 0.20, blue: 0.20))
+                        }
+                        .frame(width: 29, height: 29)
+                        Text("AppleCare & Warranty")
+                    }
                 }
             } footer: {
                 Text("Last iCloud backup: July 12, 2025 at 18:13")
@@ -202,20 +249,37 @@ struct DeviceDetailView: View {
         }
     }
 
-    private func iconRow(_ title: String, _ icon: String, _ color: Color) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon).foregroundStyle(.white).frame(width: 29, height: 29)
-                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(color))
-            Text(title)
-        }
-    }
+}
 
-    private func iconRowLink(_ title: String, _ icon: String, _ color: Color, tint: Color) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon).foregroundStyle(tint).frame(width: 29, height: 29)
-                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(color))
-            Text(title)
+/// Small device rendering (frame + wallpaper) like the one iOS shows at the
+/// top of Device Info: about 50×67pt for iPad, 34×68pt for iPhone.
+struct DeviceImageView: View {
+    var isPad: Bool
+    var scale: CGFloat = 1
+
+    var body: some View {
+        let width: CGFloat = (isPad ? 50 : 34) * scale
+        let height: CGFloat = (isPad ? 67 : 68) * scale
+        let outerRadius: CGFloat = (isPad ? 6 : 8) * scale
+        ZStack {
+            RoundedRectangle(cornerRadius: outerRadius, style: .continuous)
+                .fill(Color(.systemGray4))
+            RoundedRectangle(cornerRadius: outerRadius - 2.5, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(red: 0.05, green: 0.20, blue: 0.55),
+                            Color(red: 0.12, green: 0.55, blue: 0.85),
+                            Color(red: 0.55, green: 0.85, blue: 0.95),
+                            Color(red: 0.90, green: 0.96, blue: 1.00)
+                        ],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    )
+                )
+                .padding(3 * scale)
         }
+        .frame(width: width, height: height)
+        .accessibilityHidden(true)
     }
 }
 

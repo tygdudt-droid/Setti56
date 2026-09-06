@@ -125,6 +125,48 @@ struct RouteLink<Label: View, Destination: View>: View {
     }
 }
 
+/// A plain button that pushes a destination — for accessories like ⓘ that
+/// sit inside a row next to another tappable control, where a nested
+/// `NavigationLink` would not work.
+///
+/// Regular-width iPad pushes a String route via `RouteRegistry` onto
+/// `model.path`; iPhone / compact uses `navigationDestination(isPresented:)`.
+struct PushButton<Label: View, Destination: View>: View {
+    let key: String
+    private let destinationBuilder: () -> Destination
+    private let labelBuilder: () -> Label
+
+    @Environment(PrimarySettingsListModel.self) private var model
+    @State private var pushCompact = false
+
+    init(
+        _ key: String,
+        @ViewBuilder destination: @escaping () -> Destination,
+        @ViewBuilder label: @escaping () -> Label
+    ) {
+        self.key = key
+        self.destinationBuilder = destination
+        self.labelBuilder = label
+    }
+
+    var body: some View {
+        Button {
+            if UIDevice.iPhone || model.isCompact {
+                pushCompact = true
+            } else {
+                RouteRegistry.shared.register(key) { destinationBuilder() }
+                model.path.append(key)
+            }
+        } label: {
+            labelBuilder()
+        }
+        .buttonStyle(.borderless)
+        .navigationDestination(isPresented: $pushCompact) {
+            destinationBuilder()
+        }
+    }
+}
+
 #Preview("ContentView") {
     ContentView()
         .environment(PrimarySettingsListModel())

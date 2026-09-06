@@ -16,6 +16,9 @@ import SwiftUI
 struct CustomList<Content: View>: View {
     var title = ""
     var topPadding = false
+    /// Most Settings pages are centered at a readable width on iPad; a few
+    /// (Hidden Apps) span the whole column.
+    var readableWidth = true
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -26,7 +29,7 @@ struct CustomList<Content: View>: View {
         .navigationTitle(LocalizedStringKey(title))
         .navigationBarTitleDisplayMode(.inline)
         .padding(.top, topPadding ? 0 : -17.5)
-        .settingsReadableWidth()
+        .settingsReadableWidth(enabled: readableWidth)
         .navigationDestination(for: String.self) { key in
             // Never push a nil/blank destination (black page) for unregistered routes.
             RouteRegistry.shared.view(for: key) ?? AnyView(
@@ -74,8 +77,13 @@ struct SettingsReadableWidth: ViewModifier {
 
 extension View {
     /// Centers list content at the iPadOS Settings readable width. No-op on iPhone.
-    func settingsReadableWidth() -> some View {
-        modifier(SettingsReadableWidth())
+    @ViewBuilder
+    func settingsReadableWidth(enabled: Bool = true) -> some View {
+        if enabled {
+            modifier(SettingsReadableWidth())
+        } else {
+            self
+        }
     }
 }
 

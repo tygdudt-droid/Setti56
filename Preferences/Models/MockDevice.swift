@@ -41,10 +41,18 @@ struct MockDevice {
         "iPhone17,3": "iPhone 16", "iPhone17,4": "iPhone 16 Plus", "iPhone17,5": "iPhone 16e",
         "iPhone18,1": "iPhone 17 Pro", "iPhone18,2": "iPhone 17 Pro Max",
         "iPhone18,3": "iPhone 17", "iPhone18,4": "iPhone Air",
-        "iPad14,3": "iPad Pro 11-inch (4th generation)", "iPad14,5": "iPad Pro 12.9-inch (6th generation)",
-        "iPad16,3": "iPad Pro 11-inch (M4)", "iPad16,5": "iPad Pro 13-inch (M4)",
-        "iPad14,8": "iPad Air 11-inch (M2)", "iPad14,10": "iPad Air 13-inch (M2)",
-        "iPad15,3": "iPad Air 11-inch (M3)", "iPad15,5": "iPad Air 13-inch (M3)",
-        "iPad15,7": "iPad (A16)", "iPad16,1": "iPad mini (A17 Pro)"
+        // Wi-Fi and cellular variants share a name (x,odd / x,even).
+        "iPad14,3": "iPad Pro 11-inch (4th generation)", "iPad14,4": "iPad Pro 11-inch (4th generation)",
+        "iPad14,5": "iPad Pro 12.9-inch (6th generation)", "iPad14,6": "iPad Pro 12.9-inch (6th generation)",
+        "iPad16,3": "iPad Pro 11-inch (M4)", "iPad16,4": "iPad Pro 11-inch (M4)",
+        "iPad16,5": "iPad Pro 13-inch (M4)", "iPad16,6": "iPad Pro 13-inch (M4)",
+        "iPad14,8": "iPad Air 11-inch (M2)", "iPad14,9": "iPad Air 11-inch (M2)",
+        "iPad14,10": "iPad Air 13-inch (M2)", "iPad14,11": "iPad Air 13-inch (M2)",
+        "iPad15,3": "iPad Air 11-inch (M3)", "iPad15,4": "iPad Air 11-inch (M3)",
+        "iPad15,5": "iPad Air 13-inch (M3)", "iPad15,6": "iPad Air 13-inch (M3)",
+        "iPad15,7": "iPad (A16)", "iPad15,8": "iPad (A16)",
+        "iPad16,1": "iPad mini (A17 Pro)", "iPad16,2": "iPad mini (A17 Pro)",
+        "iPad13,16": "iPad Air (5th generation)", "iPad13,17": "iPad Air (5th generation)",
+        "iPad13,18": "iPad (10th generation)", "iPad13,19": "iPad (10th generation)"
     ]
 }
