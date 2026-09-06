@@ -174,10 +174,10 @@ struct AppsView: View {
             }
 
             
-            // MARK: Hidden Apps
+            // MARK: Hidden Apps (authenticates first, then pushes — like iOS)
             if searchText.isEmpty {
-                SLink("Hidden Apps".localized(path: path), icon: "com.apple.graphic-icon.hidden-apps") {
-                    HiddenAppsView(cardStyle: false)
+                HiddenAppsRow(cardStyle: false) {
+                    SLabel("Hidden Apps".localized(path: path), icon: "com.apple.graphic-icon.hidden-apps")
                 }
             }
         }

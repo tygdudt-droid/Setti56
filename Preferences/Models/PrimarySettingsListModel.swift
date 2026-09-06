@@ -178,6 +178,9 @@ final class PrimarySettingsListModel {
     private let queue = DispatchQueue.global(qos: .userInitiated)
     private(set) var isConnected: Bool = false
     
+    /// Root-list Apple Account header target (regular-width iPad drives the
+    /// detail column through `selection`, so the header needs an item too).
+    let appleAccountItem: SettingsItem
     let followUpSettings: [SettingsItem]
     let radioSettings: [SettingsItem]
     let mainSettings: [SettingsItem]
@@ -188,6 +191,11 @@ final class PrimarySettingsListModel {
     let developerSettings: [SettingsItem]
 
     init() {
+        appleAccountItem = SettingsItem(
+            type: .primaryAppleAccount,
+            destination: AnyView(AppleAccountView())
+        )
+
         followUpSettings = [
             SettingsItem(
                 type: .followUpItem,

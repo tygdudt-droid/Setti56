@@ -142,74 +142,74 @@ struct HiddenAppsSettingsSection: View {
     }
 }
 
-/// Settings > Apps > Hidden Apps — Face ID / passcode gate first; nothing is
-/// shown until the gate passes. Two appearances:
-/// - cardStyle (from App Storage): rounded card + "Size ⇅" sort toolbar
-/// - plain (from Apps): centered empty state / grid on a plain background
+/// Settings > Apps > Hidden Apps and General > [Device] Storage > Hidden Apps.
+///
+/// Authentication happens in `HiddenAppsRow` *before* this page is pushed
+/// (iOS shows the Face ID / Touch ID prompt over the previous list and does
+/// nothing on cancel), so this view only renders content.
+///
+/// Two appearances, both matching iOS 26 on iPad:
+/// - cardStyle (Storage): inline "Hidden Apps" title, a trailing "Size ⇅"
+///   sort menu above a tall grouped card holding the grid or empty state.
+/// - plain (Apps): no title, plain background, empty state centered in the
+///   whole page.
 struct HiddenAppsView: View {
     @Environment(SettingsStore.self) private var store
     var cardStyle = true
-    @State private var unlocked = false
-    @State private var showPasscode = false
-    @State private var shake = 0
-    @State private var gateChecked = false
-    @State private var sortByName = false
+    @State private var sort: HiddenAppsSort = .size
+    @State private var appeared = false
 
     private var hidden: [MockApp] {
-        guard unlocked else { return [] }
-        return MockAppCatalog.all.filter { store.hiddenAppBundleIDs.contains($0.bundleID) }
-    }
-
-    private var sortedHidden: [MockApp] {
-        sortByName ? hidden.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending } : hidden
+        let apps = MockAppCatalog.all.filter { store.hiddenAppBundleIDs.contains($0.bundleID) }
+        switch sort {
+        case .size: return apps
+        case .name: return apps.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        }
     }
 
     var body: some View {
         Group {
-            if !unlocked {
-                // Fully opaque screen: nothing is visible behind the passcode
-                // sheet until the gate passes.
-                Color(.systemBackground).ignoresSafeArea()
-            } else if cardStyle {
+            if cardStyle {
                 cardContent
             } else {
                 plainContent
             }
         }
-        .toolbar {
-            if cardStyle && unlocked {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { sortByName.toggle() } label: {
-                        Label("Size", systemImage: "arrow.up.arrow.down")
-                    }
-                }
-            }
-        }
-        .modifier(ShakeEffect(shakes: shake))
-        .task { await gate() }
-        .sheet(isPresented: $showPasscode) {
-            MockPasscodeSheet(title: "Enter Passcode to View Hidden Apps") { ok in
-                showPasscode = false
-                if ok { reveal() } else { fail() }
-            }
-        }
+        .onAppear { appeared = true }
     }
 
-    // MARK: Card style (App Storage)
+    // MARK: Card style (Storage)
     private var cardContent: some View {
         CustomList(title: "Hidden Apps", topPadding: true) {
             Section {
-                if sortedHidden.isEmpty {
-                    ContentUnavailableView {
-                        Label("No Hidden Apps", systemImage: "square.stack.3d.up.slash")
-                    } description: {
-                        Text("No hidden apps found.")
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 72)
+                if hidden.isEmpty {
+                    HiddenAppsEmptyState(showsDescription: true)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 32)
+                        .padding(.bottom, 56)
                 } else {
                     grid
                 }
+            } header: {
+                HStack {
+                    Spacer()
+                    Menu {
+                        Picker("Sort", selection: $sort) {
+                            ForEach(HiddenAppsSort.allCases, id: \.self) { option in
+                                Text(option.title).tag(option)
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(sort.title)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption.weight(.semibold))
+                        }
+                        .font(.body)
+                        .foregroundStyle(.blue)
+                    }
+                }
+                .textCase(nil)
             }
         }
     }
@@ -217,16 +217,10 @@ struct HiddenAppsView: View {
     // MARK: Plain style (Apps)
     private var plainContent: some View {
         ZStack {
-            Color(.systemBackground).ignoresSafeArea()
-            if sortedHidden.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "square.stack.3d.up.slash")
-                        .font(.system(size: 56, weight: .light))
-                        .foregroundStyle(.secondary)
-                    Text("No Hidden Apps")
-                        .font(.title2.bold())
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            Color(uiColor: .systemBackground).ignoresSafeArea()
+            if hidden.isEmpty {
+                HiddenAppsEmptyState(showsDescription: false)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
                     grid
@@ -234,14 +228,13 @@ struct HiddenAppsView: View {
                 }
             }
         }
-        .navigationTitle("Hidden Apps")
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
     }
 
-
     private var grid: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 24) {
-            ForEach(Array(sortedHidden.enumerated()), id: \.element.id) { i, app in
+            ForEach(Array(hidden.enumerated()), id: \.element.id) { i, app in
                 VStack(spacing: 6) {
                     AppIconView(app: app, side: 60)
                         .contextMenu {
@@ -250,32 +243,124 @@ struct HiddenAppsView: View {
                     Text(app.name).font(.caption).lineLimit(1)
                 }
                 .transition(.scale.combined(with: .opacity))
+                .opacity(appeared ? 1 : 0)
+                .scaleEffect(appeared ? 1 : 0.7)
+                .animation(.spring(response: 0.45, dampingFraction: 0.8).delay(Double(i) * 0.04), value: appeared)
             }
         }
         .padding(.vertical, 8)
-        .animation(.spring(response: 0.45, dampingFraction: 0.8), value: unlocked)
+    }
+}
+
+enum HiddenAppsSort: CaseIterable {
+    case size, name
+
+    var title: String {
+        switch self {
+        case .size: return "Size"
+        case .name: return "Name"
+        }
+    }
+}
+
+/// Large centered placeholder used by both Hidden Apps appearances.
+struct HiddenAppsEmptyState: View {
+    var showsDescription: Bool
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Image(systemName: "square.stack.3d.up.slash")
+                .font(.system(size: 60, weight: .regular))
+                .foregroundStyle(.secondary)
+                .padding(.bottom, 18)
+            Text("No Hidden Apps")
+                .font(.system(size: 30, weight: .bold))
+            if showsDescription {
+                Text("No hidden apps found.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 6)
+            }
+        }
+        .multilineTextAlignment(.center)
+    }
+}
+
+/// List row that opens Hidden Apps the way iOS does: Face ID / Touch ID /
+/// passcode first, over the current list, and only then push the page.
+/// Cancelling leaves you where you were.
+///
+/// - Regular-width iPad: the detail stack is bound to `model.path`, so the
+///   page is pushed as a String route through `RouteRegistry`.
+/// - iPhone / compact: pushed with `navigationDestination(isPresented:)`.
+struct HiddenAppsRow<RowLabel: View>: View {
+    var cardStyle: Bool
+    @ViewBuilder var label: () -> RowLabel
+
+    @Environment(SettingsStore.self) private var store
+    @Environment(PrimarySettingsListModel.self) private var model
+    @State private var authenticating = false
+    @State private var pushCompact = false
+    @State private var showPasscode = false
+    @State private var passcodeAccepted = false
+
+    private var routeKey: String { cardStyle ? "HiddenApps/card" : "HiddenApps/plain" }
+
+    var body: some View {
+        Button {
+            Task { await tap() }
+        } label: {
+            HStack {
+                label()
+                Spacer()
+                Image(systemName: "chevron.forward")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .contentShape(Rectangle())
+        }
+        .foregroundStyle(.primary)
+        .navigationDestination(isPresented: $pushCompact) {
+            HiddenAppsView(cardStyle: cardStyle)
+        }
+        .sheet(
+            isPresented: $showPasscode,
+            onDismiss: {
+                if passcodeAccepted { push() }
+            },
+            content: {
+                MockPasscodeSheet(title: "Enter Passcode to View Hidden Apps") { ok in
+                    passcodeAccepted = ok
+                    showPasscode = false
+                }
+            }
+        )
     }
 
-    private func gate() async {
-        guard store.requireAuthForHiddenApps else { reveal(); return }
+    private func tap() async {
+        guard !authenticating else { return }
+        guard store.requireAuthForHiddenApps else { push(); return }
+        authenticating = true
+        defer { authenticating = false }
         switch await HiddenAppsAuth.authenticate(reason: "Unlock Hidden Apps") {
-        case .some(true): reveal()
+        case .some(true):
+            push()
         case .some(false):
-            if store.mockPasscode.isEmpty { fail() } else { showPasscode = true }
+            // Cancelled or failed: iOS simply stays on the current list.
+            UINotificationFeedbackGenerator().notificationOccurred(.error)
         case .none:
-            if store.mockPasscode.isEmpty { fail() } else { showPasscode = true }
+            // No biometrics / device passcode (Simulator): mock passcode sheet.
+            if store.mockPasscode.isEmpty { push() } else { showPasscode = true }
         }
     }
 
-    private func reveal() {
-        gateChecked = true
+    private func push() {
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
-        withAnimation(.spring(response: 0.55, dampingFraction: 0.72)) { unlocked = true }
-    }
-
-    private func fail() {
-        gateChecked = true
-        UINotificationFeedbackGenerator().notificationOccurred(.error)
-        withAnimation(.default) { shake += 1 }
+        if UIDevice.iPhone || model.isCompact {
+            pushCompact = true
+        } else {
+            RouteRegistry.shared.register(routeKey) { HiddenAppsView(cardStyle: cardStyle) }
+            model.path.append(routeKey)
+        }
     }
 }

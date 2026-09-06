@@ -3,7 +3,13 @@
 //  Preferences
 //
 //  Root-list header row: signed-out shows the sign-in entry, signed-in
-//  shows the account name/avatar and pushes the account page.
+//  shows the account name/avatar and opens the account page.
+//
+//  On iPhone (or a compact iPad) the row is a regular NavigationLink. On a
+//  regular-width iPad the detail column is driven by `model.selection`, so
+//  the row must set the selection instead of pushing a view: a view-based
+//  link inside a NavigationSplitView sidebar takes over the detail column
+//  and later sidebar taps stop switching pages.
 //
 
 import SwiftUI
@@ -14,22 +20,42 @@ struct AppleAccountHeaderRow: View {
     @State private var showingSignInError = false
     @State private var showingSignInSheet = false
 
+    private var isSelected: Bool {
+        model.selection?.type == .primaryAppleAccount
+    }
+
     var body: some View {
         if let account = store.account {
-            NavigationLink {
-                AppleAccountView()
-            } label: {
-                HStack(spacing: 14) {
-                    AvatarView(account: account, size: 60)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(account.fullName)
-                            .font(.title2)
-                        Text("Apple Account, iCloud, and more")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
+            if UIDevice.iPhone || model.isCompact {
+                NavigationLink {
+                    AppleAccountView()
+                } label: {
+                    signedInLabel(account)
                 }
-                .padding(.vertical, 6)
+            } else {
+                Button {
+                    if isSelected {
+                        model.path = []
+                    } else {
+                        model.selection = model.appleAccountItem
+                    }
+                } label: {
+                    HStack {
+                        signedInLabel(account)
+                        Spacer()
+                        Image(systemName: "chevron.forward")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.primary)
+                .accessibilityIdentifier("com.apple.settings.primaryAppleAccount")
+                .modifier(listRowBackgroundEffect(
+                    isActive: UIDevice.iPad && !model.isCompact,
+                    isSelected: isSelected
+                ))
             }
         } else {
             Button {
@@ -52,6 +78,20 @@ struct AppleAccountHeaderRow: View {
                 }
             }
         }
+    }
+
+    private func signedInLabel(_ account: MockAppleAccount) -> some View {
+        HStack(spacing: 14) {
+            AvatarView(account: account, size: 60)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(account.fullName)
+                    .font(.title2)
+                Text("Apple Account, iCloud, and more")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 6)
     }
 }
 

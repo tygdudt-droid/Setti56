@@ -39,15 +39,35 @@ struct SettingsGroup: View {
             ForEach(group) { setting in
                 if setting.type == .iCloud {
                     if store.account != nil {
-                        Button {
-                            model.selection = setting
-                            model.path = []
-                        } label: {
-                            SLabel(setting.title, icon: setting.icon)
+                        if UIDevice.iPhone || model.isCompact {
+                            // Compact: push like every other row.
+                            NavigationLink {
+                                setting.destination
+                            } label: {
+                                SLabel(setting.title, icon: setting.icon)
+                            }
+                            .accessibilityIdentifier("com.apple.settings.\(setting.type)")
+                            .navigationLinkIndicatorVisibility(.visible)
+                            .foregroundStyle(.primary)
+                            .padding(.vertical, -5)
+                        } else {
+                            // Regular width: the detail column follows the selection.
+                            Button {
+                                if model.selection != setting {
+                                    model.selection = setting
+                                } else {
+                                    model.path = []
+                                }
+                            } label: {
+                                SLabel(setting.title, icon: setting.icon)
+                            }
+                            .accessibilityIdentifier("com.apple.settings.\(setting.type)")
+                            .foregroundStyle(model.selection == setting ? .blue : .primary)
+                            .modifier(listRowBackgroundEffect(
+                                isActive: UIDevice.iPad && !model.isCompact,
+                                isSelected: model.selection == setting
+                            ))
                         }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.primary)
-                        .padding(.vertical, -5)
                     } else {
                         Button {
                             if model.isConnected {
@@ -232,7 +252,8 @@ struct SettingsGroup: View {
     }
 }
 
-private struct listRowBackgroundEffect: ViewModifier {
+/// Sidebar selection highlight shared by SettingsGroup and AppleAccountHeaderRow.
+struct listRowBackgroundEffect: ViewModifier {
     let isActive: Bool
     let isSelected: Bool
     

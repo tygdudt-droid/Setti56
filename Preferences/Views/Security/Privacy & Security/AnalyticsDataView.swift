@@ -3,6 +3,11 @@ import SwiftUI
 /// Settings > Privacy & Security > Analytics & Improvements > Analytics Data
 /// Matches iOS: a plain file list (searchable) where each file opens a
 /// monospaced viewer with its own Share button. Long-press a row for quick Share.
+///
+/// Rows push a String route through `RouteRegistry` (like every other link in
+/// the app) so they work both on iPhone and inside the iPad detail
+/// `NavigationStack`, whose path is bound to `[String]` and cannot present
+/// values of any other type.
 struct AnalyticsDataView: View {
     @State private var store = AnalyticsStore.shared
     @State private var searchText = ""
@@ -16,7 +21,9 @@ struct AnalyticsDataView: View {
         CustomList(title: "Analytics Data", topPadding: true) {
             Section {
                 ForEach(files) { file in
-                    NavigationLink(value: file) {
+                    RouteLink(Self.routeKey(for: file)) {
+                        AnalyticsFileDetailView(file: file)
+                    } label: {
                         Text(file.name)
                             .font(.body.weight(.semibold))
                             .lineLimit(1)
@@ -32,7 +39,6 @@ struct AnalyticsDataView: View {
                 }
             }
         }
-        .navigationDestination(for: AnalyticsFile.self) { AnalyticsFileDetailView(file: $0) }
         .refreshable { store.reload() }
         .searchable(
             text: $searchText,
@@ -45,20 +51,30 @@ struct AnalyticsDataView: View {
             }
         }
     }
+
+    static func routeKey(for file: AnalyticsFile) -> String {
+        "AnalyticsData/\(file.name)"
+    }
 }
 
+/// Settings > … > Analytics Data > [file]
+/// iOS shows the file name as an inline title, the raw contents in a small
+/// monospaced font (wrapped, vertical scrolling only) and a Share button.
 struct AnalyticsFileDetailView: View {
     let file: AnalyticsFile
     @State private var text = ""
 
     var body: some View {
-        ScrollView([.vertical, .horizontal]) {
+        ScrollView {
             Text(text)
                 .font(.system(size: 11, design: .monospaced))
                 .textSelection(.enabled)
-                .padding(.horizontal, UIDevice.iPad ? 20 : 12)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, UIDevice.iPad ? 8 : 12)
+                .padding(.top, 6)
+                .padding(.bottom, 24)
         }
+        .background(Color(.systemBackground))
         .navigationTitle(file.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

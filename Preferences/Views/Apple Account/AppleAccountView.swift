@@ -1,8 +1,13 @@
 import SwiftUI
 import PhotosUI
 
+/// Settings > [Apple Account]
+///
+/// Every push in here goes through `RouteLink` (String routes) so the iPad
+/// detail stack can track and reset them when the sidebar selection changes.
 struct AppleAccountView: View {
     @Environment(SettingsStore.self) private var store
+    @Environment(PrimarySettingsListModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var photoItem: PhotosPickerItem?
     @State private var confirmSignOut = false
@@ -41,29 +46,19 @@ struct AppleAccountView: View {
                 }
 
                 Section(header: Text("Devices").textCase(nil)) {
-                    NavigationLink {
-                        DeviceDetailView(name: MockDevice.current.deviceName,
-                                         subtitle: "This \(identity.modelName ?? MockDevice.current.modelName)")
+                    let thisName = MockDevice.current.deviceName
+                    let thisSubtitle = "This \(identity.modelName ?? MockDevice.current.modelName)"
+                    RouteLink("AppleAccount/Device/this") {
+                        DeviceDetailView(name: thisName, subtitle: thisSubtitle)
                     } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: MockDevice.current.isPad ? "ipad" : "iphone").font(.title2)
-                            VStack(alignment: .leading) {
-                                Text(MockDevice.current.deviceName)
-                                Text("This \(identity.modelName ?? MockDevice.current.modelName)").font(.footnote).foregroundStyle(.secondary)
-                            }
-                        }
+                        deviceLabel(symbol: MockDevice.current.isPad ? "ipad" : "iphone", name: thisName, subtitle: thisSubtitle)
                     }
                     ForEach(account.devices) { d in
-                        NavigationLink {
-                            DeviceDetailView(name: d.name, subtitle: d.model.isEmpty ? d.kind.rawValue : d.model)
+                        let subtitle = d.model.isEmpty ? d.kind.rawValue : d.model
+                        RouteLink("AppleAccount/Device/\(d.name)") {
+                            DeviceDetailView(name: d.name, subtitle: subtitle)
                         } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: d.kind.symbol).font(.title2)
-                                VStack(alignment: .leading) {
-                                    Text(d.name)
-                                    Text(d.model.isEmpty ? d.kind.rawValue : d.model).font(.footnote).foregroundStyle(.secondary)
-                                }
-                            }
+                            deviceLabel(symbol: d.kind.symbol, name: d.name, subtitle: subtitle)
                         }
                     }
                 }
@@ -88,14 +83,38 @@ struct AppleAccountView: View {
             } message: {
                 Text("Signing out will remove iCloud data and turn off Find My for this device.")
             }
-            .sheet(isPresented: $showKeepData) { KeepDataSheet { store.account = nil; dismiss() } }
+            .sheet(isPresented: $showKeepData) {
+                KeepDataSheet { signOut() }
+            }
         } else {
             ContentUnavailableView("Not Signed In", systemImage: "person.crop.circle.badge.xmark")
         }
     }
 
+    private func signOut() {
+        store.account = nil
+        if UIDevice.iPhone || model.isCompact {
+            dismiss()
+        } else {
+            // The detail column is driven by the sidebar selection on iPad.
+            model.selection = model.mainSettings.first
+        }
+    }
+
+    private func deviceLabel(symbol: String, name: String, subtitle: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol).font(.title2)
+            VStack(alignment: .leading) {
+                Text(name)
+                Text(subtitle).font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+    }
+
     private func row(_ title: String, _ icon: String, _ color: Color, value: String? = nil, iconTint: Color = .white) -> some View {
-        NavigationLink { ContentUnavailableView(title, systemImage: icon) } label: {
+        RouteLink("AppleAccount/\(title)") {
+            ContentUnavailableView(title, systemImage: icon)
+        } label: {
             HStack(spacing: 12) {
                 Image(systemName: icon).foregroundStyle(iconTint).frame(width: 29, height: 29)
                     .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(color))
@@ -143,21 +162,27 @@ struct DeviceDetailView: View {
             }
 
             Section {
-                NavigationLink { ContentUnavailableView("Find My", systemImage: "location.fill") } label: {
+                RouteLink("DeviceInfo/FindMy") {
+                    ContentUnavailableView("Find My", systemImage: "location.fill")
+                } label: {
                     LabeledContent {
                         Text("On").foregroundStyle(.secondary)
                     } label: {
                         iconRow("Find My \(device.deviceTypeName)", "location.fill", .green)
                     }
                 }
-                NavigationLink { ContentUnavailableView("iCloud Backup", systemImage: "arrow.clockwise.icloud") } label: {
+                RouteLink("DeviceInfo/iCloudBackup") {
+                    ContentUnavailableView("iCloud Backup", systemImage: "arrow.clockwise.icloud")
+                } label: {
                     LabeledContent {
                         Text("On").foregroundStyle(.secondary)
                     } label: {
                         iconRow("iCloud Backup", "arrow.triangle.2.circlepath", .teal)
                     }
                 }
-                NavigationLink { ContentUnavailableView("AppleCare & Warranty", systemImage: "apple.logo") } label: {
+                RouteLink("DeviceInfo/AppleCare") {
+                    ContentUnavailableView("AppleCare & Warranty", systemImage: "apple.logo")
+                } label: {
                     iconRowLink("AppleCare & Warranty", "apple.logo", .white, tint: .black)
                 }
             } footer: {
@@ -222,4 +247,5 @@ private struct KeepDataSheet: View {
         AppleAccountView()
     }
     .environment(SettingsStore.shared)
+    .environment(PrimarySettingsListModel())
 }

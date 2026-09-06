@@ -88,6 +88,43 @@ struct SLink<Destination: View>: View {
     }
 }
 
+/// A `NavigationLink` with a fully custom label that pushes a String route
+/// through `RouteRegistry`, exactly like `SLink` does.
+///
+/// Use this instead of `NavigationLink { destination } label: { … }` anywhere
+/// inside the app: the iPad detail `NavigationStack` is bound to a `[String]`
+/// path, so only String routes are tracked (and reset when the sidebar
+/// selection changes). View-based links get "stuck" in that column.
+///
+/// - Parameters:
+///   - key: Unique route key. Prefix it with the owning screen to avoid clashes.
+///   - destination: The destination view to push.
+///   - label: The row content.
+struct RouteLink<Label: View, Destination: View>: View {
+    let key: String
+    private let destinationBuilder: () -> Destination
+    private let labelBuilder: () -> Label
+
+    init(
+        _ key: String,
+        @ViewBuilder destination: @escaping () -> Destination,
+        @ViewBuilder label: @escaping () -> Label
+    ) {
+        self.key = key
+        self.destinationBuilder = destination
+        self.labelBuilder = label
+    }
+
+    var body: some View {
+        NavigationLink(value: key) {
+            labelBuilder()
+        }
+        .onAppear {
+            RouteRegistry.shared.register(key) { destinationBuilder() }
+        }
+    }
+}
+
 #Preview("ContentView") {
     ContentView()
         .environment(PrimarySettingsListModel())

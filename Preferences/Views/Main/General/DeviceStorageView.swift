@@ -103,11 +103,9 @@ struct DeviceStorageView: View {
                 }
             }
 
-            // MARK: Hidden Apps
+            // MARK: Hidden Apps (authenticates first, then pushes — like iOS)
             Section {
-                NavigationLink {
-                    HiddenAppsView()
-                } label: {
+                HiddenAppsRow(cardStyle: true) {
                     Label("Hidden Apps", systemImage: "eye.slash")
                         .labelIconToTitleSpacing(12)
                 }
