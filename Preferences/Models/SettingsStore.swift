@@ -24,7 +24,9 @@ final class SettingsStore {
     var chargeLimit: Int { didSet { UserDefaults.standard.set(chargeLimit, forKey: "battery.chargeLimit") } }
 
     // MARK: Hidden apps
-    var hiddenAppBundleIDs: Set<String> { didSet { persist(Array(hiddenAppBundleIDs), key: "apps.hidden") } }
+    /// Empty by default (like a real device). Key bumped so installs that
+    /// still carry the old seeded set start clean.
+    var hiddenAppBundleIDs: Set<String> { didSet { persist(Array(hiddenAppBundleIDs), key: "apps.hidden.v2") } }
     var requireAuthForHiddenApps: Bool { didSet { UserDefaults.standard.set(requireAuthForHiddenApps, forKey: "apps.hidden.auth") } }
     var mockPasscode: String { didSet { UserDefaults.standard.set(mockPasscode, forKey: "mock.passcode") } }
 
@@ -43,7 +45,7 @@ final class SettingsStore {
         batteryPercentage = d.object(forKey: "battery.percentage") as? Bool ?? true
         optimizedCharging = d.object(forKey: "battery.optimized") as? Bool ?? true
         chargeLimit = d.object(forKey: "battery.chargeLimit") as? Int ?? 80
-        hiddenAppBundleIDs = Set(SettingsStore.load([String].self, key: "apps.hidden") ?? ["com.mock.ledger", "com.mock.notesplus"])
+        hiddenAppBundleIDs = Set(SettingsStore.load([String].self, key: "apps.hidden.v2") ?? [])
         requireAuthForHiddenApps = d.object(forKey: "apps.hidden.auth") as? Bool ?? true
         mockPasscode = d.string(forKey: "mock.passcode") ?? "000000"
         storage = SettingsStore.load(MockStorageSettings.self, key: "mock.storage") ?? MockStorageSettings()

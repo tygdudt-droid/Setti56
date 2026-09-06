@@ -57,6 +57,7 @@ struct GeneralView: View {
             Section {
                 SLink(
                     "AIRDROP".localized(path: path, table: table),
+                    icon: "com.apple.graphic-icon.airdrop",
                     destination: AirDropView()
                 )
                 .contextMenu {

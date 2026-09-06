@@ -38,28 +38,37 @@ struct CustomList<Content: View>: View {
 
 /// iPadOS Settings keeps detail content at a readable width (about 730pt)
 /// centered in the column; whatever is left over becomes equal side margins
-/// (roughly 52pt on an 11-inch iPad, about 140pt on a 13-inch one). The
-/// grouped background and scroll indicators still span the whole column,
-/// which is why this uses scroll-content margins instead of padding.
+/// (roughly 52pt on an 11-inch iPad, about 135pt on a 13-inch one).
+///
+/// Implemented as plain horizontal padding on the List (the approach that
+/// always worked here), with the amount measured from the column width.
 struct SettingsReadableWidth: ViewModifier {
     /// Width of the cards on iPadOS 26 Settings, measured from screenshots.
     static let maxContentWidth: CGFloat = 730
     /// Built-in horizontal inset of an inset-grouped List on iPad.
     static let defaultListInset: CGFloat = 20
+    /// Used until the first measurement arrives (11-inch iPad value).
+    static let fallbackInset: CGFloat = 52
+
+    @State private var inset: CGFloat = SettingsReadableWidth.fallbackInset
 
     func body(content: Content) -> some View {
         if UIDevice.iPad {
-            GeometryReader { geo in
-                content
-                    .contentMargins(.horizontal, Self.sideInset(for: geo.size.width), for: .scrollContent)
-            }
+            content
+                .padding(.horizontal, inset)
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.size.width
+                } action: { width in
+                    inset = Self.sideInset(for: width)
+                }
         } else {
             content
         }
     }
 
     static func sideInset(for width: CGFloat) -> CGFloat {
-        max(0, (width - maxContentWidth) / 2 - defaultListInset)
+        guard width > 0 else { return fallbackInset }
+        return max(0, (width - maxContentWidth) / 2 - defaultListInset)
     }
 }
 
