@@ -28,6 +28,9 @@ final class SettingsStore {
     var requireAuthForHiddenApps: Bool { didSet { UserDefaults.standard.set(requireAuthForHiddenApps, forKey: "apps.hidden.auth") } }
     var mockPasscode: String { didSet { UserDefaults.standard.set(mockPasscode, forKey: "mock.passcode") } }
 
+    // MARK: Storage (General > [Device] Storage)
+    var storage: MockStorageSettings { didSet { persist(storage, key: "mock.storage") } }
+
     private init() {
         let d = UserDefaults.standard
         account = SettingsStore.load(MockAppleAccount.self, key: "account")
@@ -43,6 +46,7 @@ final class SettingsStore {
         hiddenAppBundleIDs = Set(SettingsStore.load([String].self, key: "apps.hidden") ?? ["com.mock.ledger", "com.mock.notesplus"])
         requireAuthForHiddenApps = d.object(forKey: "apps.hidden.auth") as? Bool ?? true
         mockPasscode = d.string(forKey: "mock.passcode") ?? "000000"
+        storage = SettingsStore.load(MockStorageSettings.self, key: "mock.storage") ?? MockStorageSettings()
     }
 
     private func persist<T: Encodable>(_ value: T?, key: String) {

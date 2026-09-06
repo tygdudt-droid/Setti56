@@ -108,6 +108,22 @@ struct MockConfigView: View {
                 Button("Reset Wi-Fi Networks") { store.resetWiFi() }
             } header: { Text("Wi-Fi Networks").textCase(nil) } footer: { Text("Swipe to delete. Tap a network to edit its name, password, security and state.") }
 
+            // MARK: Storage
+            Section {
+                Toggle("Show Recommendations", isOn: $store.storage.showRecommendations)
+                Toggle("Review Your Photos & Videos", isOn: $store.storage.reviewPhotosEnabled)
+                numberField("Photos & Videos savings (GB)", value: $store.storage.reviewPhotosSaveGB)
+                Toggle("“Recently Deleted” Album", isOn: $store.storage.recentlyDeletedEnabled)
+                numberField("Recently Deleted savings (MB)", value: $store.storage.recentlyDeletedSaveMB)
+            } header: { Text("Storage Recommendations").textCase(nil) } footer: { Text("Shown at the top of General → iPad Storage. Tapping Empty on the device turns the Recently Deleted card off; turn it back on here.") }
+
+            Section {
+                numberField("Total capacity (GB)", value: $store.storage.totalGB)
+                numberField("Photos (GB)", value: $store.storage.photosGB)
+                numberField("iPadOS (GB)", value: $store.storage.osGB)
+                numberField("System Data (GB)", value: $store.storage.systemDataGB)
+            } header: { Text("Storage Usage").textCase(nil) } footer: { Text("Applications is the sum of the app list. Used = Applications + Photos + iPadOS + System Data; the remainder is shown as free space.") }
+
             Section {
                 Toggle("Hidden Apps require Face ID / passcode", isOn: $store.requireAuthForHiddenApps)
                 LabeledContent("Mock passcode", value: store.mockPasscode)
@@ -138,9 +154,20 @@ struct MockConfigView: View {
                 for k in d.dictionaryRepresentation().keys { d.removeObject(forKey: k) }
                 store.account = nil
                 store.resetWiFi()
+                store.storage = MockStorageSettings()
                 identity = MockDeviceIdentity.regenerate()
                 load()
             }
+        }
+    }
+
+    /// Right-aligned decimal field for a mock number.
+    private func numberField(_ title: String, value: Binding<Double>) -> some View {
+        LabeledContent(title) {
+            TextField("0", value: value, format: .number.precision(.fractionLength(0...2)))
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: 120)
         }
     }
 

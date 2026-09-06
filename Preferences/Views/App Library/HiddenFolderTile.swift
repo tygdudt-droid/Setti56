@@ -270,11 +270,11 @@ struct HiddenAppsEmptyState: View {
     var body: some View {
         VStack(spacing: 0) {
             Image(systemName: "square.stack.3d.up.slash")
-                .font(.system(size: 60, weight: .regular))
+                .font(.system(size: 54, weight: .regular))
                 .foregroundStyle(.secondary)
-                .padding(.bottom, 18)
+                .padding(.bottom, 16)
             Text("No Hidden Apps")
-                .font(.system(size: 30, weight: .bold))
+                .font(.title.weight(.bold))
             if showsDescription {
                 Text("No hidden apps found.")
                     .font(.subheadline)
