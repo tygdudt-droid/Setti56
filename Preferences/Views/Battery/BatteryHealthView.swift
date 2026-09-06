@@ -21,6 +21,7 @@ struct BatteryHealthView: View {
             }
         }
         .navigationTitle("Battery Health")
+        .settingsReadableWidth()
         .navigationBarTitleDisplayMode(.inline)
     }
 }

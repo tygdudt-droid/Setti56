@@ -150,32 +150,29 @@ struct HiddenAppsSettingsSection: View {
 ///
 /// Two appearances, both matching iOS 26 on iPad:
 /// - cardStyle (Storage): inline "Hidden Apps" title, a trailing "Size ⇅"
-///   sort menu above a tall grouped card holding the grid or empty state.
-/// - plain (Apps): no title, plain background, empty state centered in the
-///   whole page.
+///   sort menu above a grouped card holding the app rows (name + size) or
+///   the empty state.
+/// - plain (Apps): no title; app rows (name + chevron) in a grouped card, or
+///   the empty state centered in the whole page.
 struct HiddenAppsView: View {
     @Environment(SettingsStore.self) private var store
     var cardStyle = true
     @State private var sort: HiddenAppsSort = .size
-    @State private var appeared = false
 
     private var hidden: [MockApp] {
         let apps = MockAppCatalog.all.filter { store.hiddenAppBundleIDs.contains($0.bundleID) }
         switch sort {
-        case .size: return apps
+        case .size: return apps.sorted { mockSize($0) > mockSize($1) }
         case .name: return apps.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         }
     }
 
     var body: some View {
-        Group {
-            if cardStyle {
-                cardContent
-            } else {
-                plainContent
-            }
+        if cardStyle {
+            cardContent
+        } else {
+            plainContent
         }
-        .onAppear { appeared = true }
     }
 
     // MARK: Card style (Storage)
@@ -188,7 +185,19 @@ struct HiddenAppsView: View {
                         .padding(.top, 32)
                         .padding(.bottom, 56)
                 } else {
-                    grid
+                    ForEach(hidden) { app in
+                        RouteLink("HiddenApps/card/\(app.bundleID)") {
+                            hiddenAppDetail(app)
+                        } label: {
+                            HStack(spacing: 12) {
+                                AppIconView(app: app, side: 29)
+                                Text(app.name)
+                                Spacer()
+                                Text(MockStorageCatalog.format(mockSize(app)))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
                 }
             } header: {
                 HStack {
@@ -215,40 +224,59 @@ struct HiddenAppsView: View {
     }
 
     // MARK: Plain style (Apps)
+    @ViewBuilder
     private var plainContent: some View {
-        ZStack {
-            Color(uiColor: .systemBackground).ignoresSafeArea()
-            if hidden.isEmpty {
+        if hidden.isEmpty {
+            ZStack {
+                Color(uiColor: .systemBackground).ignoresSafeArea()
                 HiddenAppsEmptyState(showsDescription: false)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollView {
-                    grid
-                        .padding(24)
+            }
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+        } else {
+            CustomList(title: "", topPadding: true) {
+                Section {
+                    ForEach(hidden) { app in
+                        RouteLink("HiddenApps/plain/\(app.bundleID)") {
+                            hiddenAppDetail(app)
+                        } label: {
+                            HStack(spacing: 12) {
+                                AppIconView(app: app, side: 29)
+                                Text(app.name)
+                            }
+                        }
+                    }
                 }
             }
         }
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
     }
 
-    private var grid: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 24) {
-            ForEach(Array(hidden.enumerated()), id: \.element.id) { i, app in
-                VStack(spacing: 6) {
+    /// Simple per-app page with an Unhide action.
+    private func hiddenAppDetail(_ app: MockApp) -> some View {
+        CustomList(title: app.name, topPadding: true) {
+            Section {
+                HStack(spacing: 14) {
                     AppIconView(app: app, side: 60)
-                        .contextMenu {
-                            Button("Unhide", systemImage: "eye") { unhideMockApp(app, in: store) }
-                        }
-                    Text(app.name).font(.caption).lineLimit(1)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(app.name).font(.title3.weight(.semibold))
+                        Text(MockStorageCatalog.format(mockSize(app))).foregroundStyle(.secondary)
+                    }
                 }
-                .transition(.scale.combined(with: .opacity))
-                .opacity(appeared ? 1 : 0)
-                .scaleEffect(appeared ? 1 : 0.7)
-                .animation(.spring(response: 0.45, dampingFraction: 0.8).delay(Double(i) * 0.04), value: appeared)
+                .padding(.vertical, 4)
+            }
+            Section {
+                Button("Unhide App") { unhideMockApp(app, in: store) }
+            } footer: {
+                Text("The app will appear again on the Home Screen and in the App Library.")
             }
         }
-        .padding(.vertical, 8)
+    }
+
+    /// Stable mock size per app (40 MB – 940 MB) derived from the bundle ID.
+    private func mockSize(_ app: MockApp) -> Int64 {
+        let h = app.bundleID.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFF }
+        return MockStorageCatalog.mb(Double(40 + h % 900))
     }
 }
 

@@ -47,6 +47,7 @@ struct ScreenTimeView: View {
             }
         }
         .navigationTitle("Screen Time")
+        .settingsReadableWidth()
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("Turn Off App & Website Activity?", isPresented: $confirmOff, titleVisibility: .visible) {
             Button("Turn Off App & Website Activity", role: .destructive) { withAnimation { enabled = false } }

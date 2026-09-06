@@ -55,6 +55,7 @@ struct ScreenTimeActivityView: View {
             }
         }
         .navigationTitle(MockDevice.current.deviceName)
+        .settingsReadableWidth()
         .navigationBarTitleDisplayMode(.inline)
     }
 }

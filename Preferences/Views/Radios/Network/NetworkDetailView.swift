@@ -117,6 +117,7 @@ struct NetworkDetailView: View {
 
         }
         .navigationTitle(network.ssid)
+        .settingsReadableWidth()
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             privateAddress = UserDefaults.standard.string(forKey: "wifi.\(ssidKey).private") ?? "Rotating"

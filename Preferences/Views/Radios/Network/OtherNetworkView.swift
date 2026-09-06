@@ -20,6 +20,7 @@ struct OtherNetworkView: View {
             }
         }
         .navigationTitle("Other Network")
+        .settingsReadableWidth()
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {

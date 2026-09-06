@@ -92,6 +92,7 @@ struct BatteryView: View {
             }
         }
         .navigationTitle("Battery")
+        .settingsReadableWidth()
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -155,6 +156,7 @@ struct ChargeLimitView: View {
             }
         }
         .navigationTitle("Charge Limit")
+        .settingsReadableWidth()
         .navigationBarTitleDisplayMode(.inline)
     }
 }

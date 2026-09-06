@@ -410,7 +410,8 @@ struct DeviceStorageView: View {
 
     private func systemRow(_ title: String, _ bytes: Int64) -> some View {
         HStack(spacing: 12) {
-            glyphTile("gearshape.fill", tint: Color(.systemGray))
+            // Real Settings app icon on device (gray gear), like iOS.
+            StorageIconView(icon: .app(bundleID: "com.apple.Preferences", symbol: "gearshape.fill", tint: "8E8E93"))
             Text(title)
             Spacer()
             Text(MockStorageCatalog.format(bytes)).foregroundStyle(.secondary)

@@ -61,6 +61,7 @@ struct AnalyticsImprovementsView: View {
             }
         }
         .navigationTitle("Analytics & Improvements")
+        .settingsReadableWidth()
         .navigationBarTitleDisplayMode(.inline)
     }
 }

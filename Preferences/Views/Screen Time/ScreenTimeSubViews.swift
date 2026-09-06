@@ -22,6 +22,7 @@ struct DowntimeView: View {
             }
         }
         .navigationTitle("Downtime")
+        .settingsReadableWidth()
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -47,6 +48,7 @@ struct AppLimitsView: View {
             } footer: { Text("Set daily time limits for app categories you want to manage. Limits reset every day at midnight.") }
         }
         .navigationTitle("App Limits")
+        .settingsReadableWidth()
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $adding) { AddLimitSheet { limits.append(Limit(category: $0, minutes: $1)) } }
     }
@@ -73,6 +75,7 @@ private struct AddLimitSheet: View {
                 Section("Time") { Stepper("\(minutesLabel(minutes))", value: $minutes, in: 15...480, step: 15) }
             }
             .navigationTitle("Choose Apps")
+            .settingsReadableWidth()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -104,6 +107,7 @@ struct AlwaysAllowedView: View {
             }
         }
         .navigationTitle("Always Allowed")
+        .settingsReadableWidth()
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -117,6 +121,7 @@ struct ScreenDistanceView: View {
             }
         }
         .navigationTitle("Screen Distance")
+        .settingsReadableWidth()
         .navigationBarTitleDisplayMode(.inline)
     }
 }
