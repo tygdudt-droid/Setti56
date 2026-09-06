@@ -67,3 +67,103 @@ struct MockPasscodeSheet: View {
         }
     }
 }
+
+
+/// iPadOS/iOS 26 style passcode prompt: centered form sheet with a close
+/// button, blue lock, "Enter your passcode", six dots and the system number
+/// pad (a hidden text field drives the keyboard). Drag down or ✕ cancels.
+struct PasscodeEntrySheet: View {
+    var title = "Enter your passcode"
+    var subtitle: String
+    var onResult: (Bool) -> Void
+
+    @Environment(SettingsStore.self) private var store
+    @State private var entered = ""
+    @State private var shake = 0
+    @State private var checking = false
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            VStack(spacing: 0) {
+                Image(systemName: "lock")
+                    .font(.system(size: 64, weight: .regular))
+                    .foregroundStyle(.blue)
+                    .padding(.top, 84)
+                Text(title)
+                    .font(.title2.weight(.bold))
+                    .padding(.top, 40)
+                Text(subtitle)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 14)
+                    .padding(.horizontal, 32)
+                dots
+                    .padding(.top, 44)
+                    .modifier(ShakeEffect(shakes: shake))
+                    .contentShape(Rectangle())
+                    .onTapGesture { focused = true }
+                Spacer()
+            }
+            .frame(maxWidth: .infinity)
+
+            // Invisible field that owns the keyboard.
+            TextField("", text: $entered)
+                .keyboardType(.numberPad)
+                .textContentType(.oneTimeCode)
+                .focused($focused)
+                .frame(width: 1, height: 1)
+                .opacity(0.02)
+                .accessibilityHidden(true)
+
+            Button {
+                onResult(false)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(.ultraThinMaterial))
+            }
+            .buttonStyle(.plain)
+            .padding(16)
+        }
+        .presentationBackground(Color(uiColor: .secondarySystemBackground))
+        .presentationCornerRadius(38)
+        .presentationSizing(.form)
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { focused = true }
+        }
+        .onChange(of: entered) { _, value in
+            let digits = String(value.filter(\.isNumber).prefix(6))
+            if digits != value { entered = digits; return }
+            if digits.count == 6 && !checking { check(digits) }
+        }
+    }
+
+    private var dots: some View {
+        HStack(spacing: 20) {
+            ForEach(0..<6, id: \.self) { i in
+                Circle()
+                    .strokeBorder(.primary, lineWidth: 1.5)
+                    .background(Circle().fill(i < entered.count ? Color.primary : .clear))
+                    .frame(width: 20, height: 20)
+            }
+        }
+    }
+
+    private func check(_ code: String) {
+        checking = true
+        if code == store.mockPasscode {
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            onResult(true)
+        } else {
+            UINotificationFeedbackGenerator().notificationOccurred(.error)
+            withAnimation(.default) { shake += 1 }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                entered = ""
+                checking = false
+            }
+        }
+    }
+}

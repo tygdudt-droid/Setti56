@@ -63,7 +63,50 @@ struct BiometricPasscodeView: View {
             : "BUTTON_TITLE".localized(path: touchPrivacy, table: "TouchID")
     }
     
+    // MARK: Passcode gate (iOS asks for the device passcode before showing this page)
+    @Environment(PrimarySettingsListModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var unlocked = false
+    @State private var showGate = false
+    @State private var gatePassed = false
+
     var body: some View {
+        Group {
+            if unlocked {
+                content
+            } else {
+                // Empty page with the title behind the dimmed sheet.
+                CustomList(title: title, topPadding: true) {}
+            }
+        }
+        .task {
+            guard !unlocked, !showGate else { return }
+            try? await Task.sleep(for: .milliseconds(150))
+            showGate = true
+        }
+        .sheet(
+            isPresented: $showGate,
+            onDismiss: {
+                if gatePassed {
+                    unlocked = true
+                } else if UIDevice.iPhone || model.isCompact {
+                    dismiss()
+                } else {
+                    model.selection = model.mainSettings.first
+                }
+            },
+            content: {
+                PasscodeEntrySheet(
+                    subtitle: "Enter the passcode you use to unlock this \(MockDevice.current.deviceTypeName)."
+                ) { ok in
+                    gatePassed = ok
+                    showGate = false
+                }
+            }
+        )
+    }
+
+    private var content: some View {
         CustomList(title: titleVisible ? title : "") {
             Placard(
                 title: title,
