@@ -147,6 +147,12 @@ struct ContentView: View {
                 SettingsLogger.log("Last Navigation Event: \(oldValue.joined(separator: " → "))")
             }
         }
+
+        // Switching sidebar sections resets the pushed stack — otherwise stale
+        // route values keep the detail stuck on the previous page (iCloud bug).
+        .onChange(of: model.selection) { _, _ in
+            model.path = []
+        }
         .onChange(of: horizontalSizeClass) {
             model.isCompact = horizontalSizeClass == .compact
             if !model.isCompact && model.selection == nil {

@@ -165,15 +165,38 @@ struct HiddenAppsView: View {
     }
 
     var body: some View {
-        if cardStyle {
-            cardBody
-        } else {
-            plainBody
+        Group {
+            if !unlocked {
+                // Fully opaque screen: nothing is visible behind the passcode
+                // sheet until the gate passes.
+                Color(.systemBackground).ignoresSafeArea()
+            } else if cardStyle {
+                cardContent
+            } else {
+                plainContent
+            }
+        }
+        .toolbar {
+            if cardStyle && unlocked {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { sortByName.toggle() } label: {
+                        Label("Size", systemImage: "arrow.up.arrow.down")
+                    }
+                }
+            }
+        }
+        .modifier(ShakeEffect(shakes: shake))
+        .task { await gate() }
+        .sheet(isPresented: $showPasscode) {
+            MockPasscodeSheet(title: "Enter Passcode to View Hidden Apps") { ok in
+                showPasscode = false
+                if ok { reveal() } else { fail() }
+            }
         }
     }
 
     // MARK: Card style (App Storage)
-    private var cardBody: some View {
+    private var cardContent: some View {
         CustomList(title: "Hidden Apps", topPadding: true) {
             Section {
                 if sortedHidden.isEmpty {
@@ -183,35 +206,27 @@ struct HiddenAppsView: View {
                         Text("No hidden apps found.")
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 64)
+                    .padding(.vertical, 72)
                 } else {
                     grid
                 }
             }
         }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { sortByName.toggle() } label: {
-                    Label("Size", systemImage: "arrow.up.arrow.down")
-                }
-            }
-        }
-        .modifier(ShakeEffect(shakes: shake))
-        .task { await gate() }
-        .sheet(isPresented: $showPasscode) {
-            MockPasscodeSheet(title: "Enter Passcode to View Hidden Apps") { ok in
-                showPasscode = false
-                if ok { reveal() } else { fail() }
-            }
-        }
     }
 
     // MARK: Plain style (Apps)
-    private var plainBody: some View {
+    private var plainContent: some View {
         ZStack {
             Color(.systemBackground).ignoresSafeArea()
             if sortedHidden.isEmpty {
-                ContentUnavailableView("No Hidden Apps", systemImage: "square.stack.3d.up.slash")
+                VStack(spacing: 12) {
+                    Image(systemName: "square.stack.3d.up.slash")
+                        .font(.system(size: 56, weight: .light))
+                        .foregroundStyle(.secondary)
+                    Text("No Hidden Apps")
+                        .font(.title2.bold())
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
                     grid
@@ -221,15 +236,8 @@ struct HiddenAppsView: View {
         }
         .navigationTitle("Hidden Apps")
         .navigationBarTitleDisplayMode(.inline)
-        .modifier(ShakeEffect(shakes: shake))
-        .task { await gate() }
-        .sheet(isPresented: $showPasscode) {
-            MockPasscodeSheet(title: "Enter Passcode to View Hidden Apps") { ok in
-                showPasscode = false
-                if ok { reveal() } else { fail() }
-            }
-        }
     }
+
 
     private var grid: some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 24) {
