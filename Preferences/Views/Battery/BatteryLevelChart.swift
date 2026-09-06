@@ -6,12 +6,15 @@ import SwiftUI
 struct BatteryDailyUsageChart: View {
     let days: [BatteryDay]
     let average: Int
-    /// Shows 150% / 75% / 0% labels, date sub-labels and the today callout.
+    /// Shows 150% / 75% / 0% labels, date sub-labels and the callout.
     var detailed = false
+    /// Index of the highlighted day; tapping a column changes it.
+    @Binding var selection: Int
     var plotHeight: CGFloat = 150
     var maxValue: Int = 150
 
     private let labelWidth: CGFloat = 52
+    private var lastIndex: Int { days.count - 1 }
 
     var body: some View {
         HStack(alignment: .top, spacing: 4) {
@@ -32,43 +35,45 @@ struct BatteryDailyUsageChart: View {
                         .fill(Color(white: 0.45))
                         .frame(height: 0.5)
                         .offset(y: y(for: Double(average)))
-                    // Bars
+                    // Bars — every day uses the same two grays; only the
+                    // selected day is orange. Colors never depend on value.
                     ForEach(Array(days.enumerated()), id: \.offset) { i, day in
-                        let isToday = i == days.count - 1
+                        let isSelected = i == selection
                         let x = CGFloat(i) * colWidth + (colWidth - barWidth) / 2
                         VStack(spacing: 0) {
                             Rectangle()
-                                .fill(isToday ? BatteryPalette.today : BatteryPalette.allDayBar)
+                                .fill(isSelected ? BatteryPalette.today : BatteryPalette.allDayBar)
                                 .frame(height: height(for: Double(day.allDay - day.dailyByNow)))
                             Rectangle()
-                                .fill(isToday ? BatteryPalette.today : BatteryPalette.dailyBar)
+                                .fill(isSelected ? BatteryPalette.today : BatteryPalette.dailyBar)
                                 .frame(height: height(for: Double(day.dailyByNow)))
                         }
                         .frame(width: barWidth, height: plotHeight, alignment: .bottom)
                         .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
                         .offset(x: x)
                     }
-                    // Today callout (orange rule + value)
-                    if detailed, let last = days.last {
-                        let x = CGFloat(days.count - 1) * colWidth + colWidth / 2
+                    // Callout for the selected day (orange rule + value)
+                    if detailed {
+                        let day = days[min(selection, lastIndex)]
+                        let x = CGFloat(min(selection, lastIndex)) * colWidth + colWidth / 2
                         Rectangle()
                             .fill(BatteryPalette.today)
                             .frame(width: 1.5, height: plotHeight)
                             .offset(x: x - 0.75)
                         VStack(alignment: .trailing, spacing: 0) {
-                            Text("\(last.allDay)%")
+                            Text("\(day.allDay)%")
                                 .font(.title2)
                                 .foregroundStyle(BatteryPalette.today)
-                            Text(Self.calloutDate(last.date))
+                            Text(Self.calloutDate(day.date))
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
                         .frame(width: 180, alignment: .trailing)
-                        .offset(x: x - 190, y: -62)
+                        .offset(x: max(0, x - 190), y: -62)
                     }
                     // X labels
                     ForEach(Array(days.enumerated()), id: \.offset) { i, day in
-                        let isToday = i == days.count - 1
+                        let highlighted = i == selection && (detailed || selection != lastIndex)
                         VStack(spacing: 2) {
                             Text(Self.weekdayInitial(day.date))
                             if detailed, let sub = dateSubLabel(at: i) {
@@ -76,10 +81,22 @@ struct BatteryDailyUsageChart: View {
                             }
                         }
                         .font(.subheadline)
-                        .foregroundStyle(isToday && detailed ? BatteryPalette.today : .secondary)
+                        .foregroundStyle(highlighted ? BatteryPalette.today : .secondary)
                         .frame(width: colWidth)
                         .offset(x: CGFloat(i) * colWidth, y: plotHeight + 6)
                     }
+                    // Tap targets — the whole column, including its label.
+                    HStack(spacing: 0) {
+                        ForEach(Array(days.enumerated()), id: \.offset) { i, _ in
+                            Rectangle()
+                                .fill(Color.clear)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    withAnimation(.easeInOut(duration: 0.2)) { selection = i }
+                                }
+                        }
+                    }
+                    .frame(width: width, height: plotHeight + (detailed ? 44 : 26))
                 }
             }
             .frame(height: plotHeight + (detailed ? 46 : 28))

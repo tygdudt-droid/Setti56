@@ -153,6 +153,40 @@ final class BatteryDataProvider {
     }
 }
 
+/// Reads the real charge level from the device.
+///
+/// `UIDevice` reports -1 when battery monitoring is unavailable (Simulator,
+/// Previews), in which case the mock value is used instead.
+enum DeviceBattery {
+    static func startMonitoring() {
+        UIDevice.current.isBatteryMonitoringEnabled = true
+    }
+
+    /// Real charge level 0…100, or nil when the device does not report one.
+    static var level: Int? {
+        startMonitoring()
+        let value = UIDevice.current.batteryLevel
+        guard value >= 0 else { return nil }
+        return Int((value * 100).rounded())
+    }
+
+    static var state: UIDevice.BatteryState {
+        startMonitoring()
+        return UIDevice.current.batteryState
+    }
+
+    static var isCharging: Bool { state == .charging || state == .full }
+
+    /// "Charging" / "Last Charged to 80%: 1h ago"
+    static func chargeLine(fallbackTo percent: Int, ago: String) -> String {
+        switch state {
+        case .charging: return "Charging"
+        case .full: return "Charged"
+        default: return "Last Charged to \(percent)%: \(ago)"
+        }
+    }
+}
+
 /// Colors shared by the battery charts.
 enum BatteryPalette {
     static let today = Color(red: 1.0, green: 0.62, blue: 0.04)         // orange

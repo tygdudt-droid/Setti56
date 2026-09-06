@@ -6,6 +6,7 @@ import SwiftUI
 struct BatteryView: View {
     @Environment(SettingsStore.self) private var store
     @State private var data = BatteryDataProvider.shared
+    @State private var selectedDay = BatteryDataProvider.shared.days.count - 1
 
     var body: some View {
         @Bindable var store = store
@@ -15,7 +16,7 @@ struct BatteryView: View {
             }
 
             Section {
-                BatteryDailyUsageCard(data: data)
+                BatteryDailyUsageCard(data: data, selection: $selectedDay)
                     .padding(.vertical, 6)
 
                 Text("App and System Activity")
@@ -64,11 +65,14 @@ struct BatteryView: View {
 struct BatteryUsageView: View {
     let data: BatteryDataProvider
     @State private var showAll = false
+    @State private var selectedDay = BatteryDataProvider.shared.days.count - 1
 
     var body: some View {
-        CustomList(title: "Battery Usage", topPadding: true) {
+        // Full-width page: unlike the rest of Settings, iPadOS lets the
+        // battery report span the whole detail column.
+        CustomList(title: "Battery Usage", topPadding: true, readableWidth: false) {
             Section {
-                BatteryDailyUsageCard(data: data, detailed: true)
+                BatteryDailyUsageCard(data: data, detailed: true, selection: $selectedDay)
                     .padding(.top, 6)
 
                 BatteryHourlyChart(hours: data.hours, sessions: data.chargingSessions)
