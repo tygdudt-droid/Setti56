@@ -7,6 +7,7 @@ struct AppleAccountView: View {
     @State private var photoItem: PhotosPickerItem?
     @State private var confirmSignOut = false
     @State private var showKeepData = false
+    private let identity = MockDeviceIdentity.stored
 
     var body: some View {
         if let account = store.account {
@@ -39,15 +40,33 @@ struct AppleAccountView: View {
                     row("Sign in with Apple", "apple.logo", .white, iconTint: .black)
                 }
 
-                Section {
-                    HStack(spacing: 12) {
-                        Image(systemName: MockDevice.current.isPad ? "ipad" : "iphone").font(.title2)
-                        VStack(alignment: .leading) {
-                            Text(MockDevice.current.deviceName)
-                            Text("This \(MockDevice.current.deviceTypeName)").font(.footnote).foregroundStyle(.secondary)
+                Section(header: Text("Devices").textCase(nil)) {
+                    NavigationLink {
+                        DeviceDetailView(name: MockDevice.current.deviceName,
+                                         subtitle: "This \(identity.modelName ?? MockDevice.current.modelName)")
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: MockDevice.current.isPad ? "ipad" : "iphone").font(.title2)
+                            VStack(alignment: .leading) {
+                                Text(MockDevice.current.deviceName)
+                                Text("This \(identity.modelName ?? MockDevice.current.modelName)").font(.footnote).foregroundStyle(.secondary)
+                            }
                         }
                     }
-                } header: { Text("Devices").textCase(nil) }
+                    ForEach(account.devices) { d in
+                        NavigationLink {
+                            DeviceDetailView(name: d.name, subtitle: d.model.isEmpty ? d.kind.rawValue : d.model)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: d.kind.symbol).font(.title2)
+                                VStack(alignment: .leading) {
+                                    Text(d.name)
+                                    Text(d.model.isEmpty ? d.kind.rawValue : d.model).font(.footnote).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                }
 
                 Section {
                     Button("Sign Out", role: .destructive) { confirmSignOut = true }
@@ -84,6 +103,78 @@ struct AppleAccountView: View {
                 Spacer()
                 if let value { Text(value).foregroundStyle(.secondary) }
             }
+        }
+    }
+}
+
+/// Settings > Apple Account > Devices > [Device] — matches iOS "Device Info".
+struct DeviceDetailView: View {
+    let name: String
+    let subtitle: String
+    private let device = MockDevice.current
+    private let identity = MockDeviceIdentity.stored
+
+    var body: some View {
+        CustomList(title: "Device Info", topPadding: true) {
+            Section {
+                VStack(spacing: 8) {
+                    Image(systemName: device.isPad ? "ipad.landscape" : "iphone.gen3")
+                        .font(.system(size: 52, weight: .light))
+                        .foregroundStyle(.primary)
+                    Text(name).font(.title3.weight(.semibold))
+                    Text(subtitle).font(.footnote).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .listRowBackground(Color.clear)
+            }
+
+            Section {
+                NavigationLink { ContentUnavailableView("Find My", systemImage: "location.fill") } label: {
+                    LabeledContent {
+                        Text("On").foregroundStyle(.secondary)
+                    } label: {
+                        iconRow("Find My \(device.deviceTypeName)", "location.fill", .green)
+                    }
+                }
+                NavigationLink { ContentUnavailableView("iCloud Backup", systemImage: "arrow.clockwise.icloud") } label: {
+                    LabeledContent {
+                        Text("On").foregroundStyle(.secondary)
+                    } label: {
+                        iconRow("iCloud Backup", "arrow.triangle.2.circlepath", .teal)
+                    }
+                }
+                NavigationLink { ContentUnavailableView("AppleCare & Warranty", systemImage: "apple.logo") } label: {
+                    iconRowLink("AppleCare & Warranty", "apple.logo", .white, tint: .black)
+                }
+            } footer: {
+                Text("Last iCloud backup: July 12, 2025 at 18:13")
+            }
+
+            Section(header: Text("Device Info").textCase(nil)) {
+                LabeledContent("Model", value: identity.modelName ?? device.modelName)
+                LabeledContent("Version", value: "\(device.systemName) \(identity.osVersion ?? device.systemVersion)")
+                LabeledContent("Serial Number", value: identity.serialNumber)
+                    .textSelection(.enabled)
+            } footer: {
+                Text("This device is trusted and can receive Apple Account verification codes.")
+            }
+        }
+    }
+
+    private func iconRow(_ title: String, _ icon: String, _ color: Color) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon).foregroundStyle(.white).frame(width: 29, height: 29)
+                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(color))
+            Text(title)
+        }
+    }
+
+    private func iconRowLink(_ title: String, _ icon: String, _ color: Color, tint: Color) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon).foregroundStyle(tint).frame(width: 29, height: 29)
+                .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(color))
+            Text(title)
         }
     }
 }

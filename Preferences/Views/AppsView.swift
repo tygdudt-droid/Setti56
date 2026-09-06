@@ -177,7 +177,7 @@ struct AppsView: View {
             // MARK: Hidden Apps
             if searchText.isEmpty {
                 SLink("Hidden Apps".localized(path: path), icon: "com.apple.graphic-icon.hidden-apps") {
-                    HiddenAppsView()
+                    HiddenAppsView(cardStyle: false)
                 }
             }
         }

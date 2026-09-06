@@ -95,7 +95,7 @@ struct NetworkDetailView: View {
             if isConnected {
                 Section(header: Text("IPv4 Address").textCase(nil)) {
                     NavigationLink { ConfigureIPView(selected: $configureIP) } label: {
-                        LabeledContent("Configure IP", value: "Automatic")
+                        LabeledContent("Configure IP", value: configureIP.contains("Manual") ? "Manual" : "Automatic")
                     }
                     LabeledContent("IP Address", value: ipv4Address)
                     LabeledContent("Subnet Mask", value: "255.255.255.0")
@@ -104,20 +104,17 @@ struct NetworkDetailView: View {
 
                 Section(header: Text("DNS").textCase(nil)) {
                     NavigationLink { ConfigureDNSView(selected: $configureDNS) } label: {
-                        LabeledContent("Configure DNS", value: "Automatic")
+                        LabeledContent("Configure DNS", value: configureDNS.contains("Manual") ? "Manual" : "Automatic")
                     }
                 }
 
                 Section(header: Text("HTTP Proxy").textCase(nil)) {
                     NavigationLink { ConfigureProxyView(selected: $configureProxy) } label: {
-                        LabeledContent("Configure Proxy", value: "Off")
+                        LabeledContent("Configure Proxy", value: configureProxy.contains("Off") ? "Off" : "Manual")
                     }
                 }
             }
 
-            Section(header: Text("Security").textCase(nil)) {
-                LabeledContent("Security", value: network.security.label)
-            }
         }
         .navigationTitle(network.ssid)
         .navigationBarTitleDisplayMode(.inline)

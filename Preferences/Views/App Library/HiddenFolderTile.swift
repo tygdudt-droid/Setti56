@@ -142,11 +142,13 @@ struct HiddenAppsSettingsSection: View {
     }
 }
 
-/// Settings > Apps > Hidden Apps — Face ID / passcode gate, then the iOS
-/// layout: a big rounded card with the empty state or the hidden-apps grid,
-/// and a "Size ⇅" sort control in the toolbar.
+/// Settings > Apps > Hidden Apps — Face ID / passcode gate first; nothing is
+/// shown until the gate passes. Two appearances:
+/// - cardStyle (from App Storage): rounded card + "Size ⇅" sort toolbar
+/// - plain (from Apps): centered empty state / grid on a plain background
 struct HiddenAppsView: View {
     @Environment(SettingsStore.self) private var store
+    var cardStyle = true
     @State private var unlocked = false
     @State private var showPasscode = false
     @State private var shake = 0
@@ -154,7 +156,8 @@ struct HiddenAppsView: View {
     @State private var sortByName = false
 
     private var hidden: [MockApp] {
-        MockAppCatalog.all.filter { store.hiddenAppBundleIDs.contains($0.bundleID) }
+        guard unlocked else { return [] }
+        return MockAppCatalog.all.filter { store.hiddenAppBundleIDs.contains($0.bundleID) }
     }
 
     private var sortedHidden: [MockApp] {
@@ -162,6 +165,15 @@ struct HiddenAppsView: View {
     }
 
     var body: some View {
+        if cardStyle {
+            cardBody
+        } else {
+            plainBody
+        }
+    }
+
+    // MARK: Card style (App Storage)
+    private var cardBody: some View {
         CustomList(title: "Hidden Apps", topPadding: true) {
             Section {
                 if sortedHidden.isEmpty {
@@ -171,23 +183,9 @@ struct HiddenAppsView: View {
                         Text("No hidden apps found.")
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 56)
+                    .padding(.vertical, 64)
                 } else {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 24) {
-                        ForEach(Array(sortedHidden.enumerated()), id: \.element.id) { i, app in
-                            VStack(spacing: 6) {
-                                AppIconView(app: app, side: 60)
-                                    .contextMenu {
-                                        Button("Unhide", systemImage: "eye") { unhideMockApp(app, in: store) }
-                                    }
-                                Text(app.name).font(.caption).lineLimit(1)
-                            }
-                            .blur(radius: unlocked ? 0 : 14)
-                            .saturation(unlocked ? 1 : 0)
-                            .scaleEffect(unlocked ? 1 : 0.92)
-                        }
-                    }
-                    .padding(.vertical, 24)
+                    grid
                 }
             }
         }
@@ -206,6 +204,48 @@ struct HiddenAppsView: View {
                 if ok { reveal() } else { fail() }
             }
         }
+    }
+
+    // MARK: Plain style (Apps)
+    private var plainBody: some View {
+        ZStack {
+            Color(.systemBackground).ignoresSafeArea()
+            if sortedHidden.isEmpty {
+                ContentUnavailableView("No Hidden Apps", systemImage: "square.stack.3d.up.slash")
+            } else {
+                ScrollView {
+                    grid
+                        .padding(24)
+                }
+            }
+        }
+        .navigationTitle("Hidden Apps")
+        .navigationBarTitleDisplayMode(.inline)
+        .modifier(ShakeEffect(shakes: shake))
+        .task { await gate() }
+        .sheet(isPresented: $showPasscode) {
+            MockPasscodeSheet(title: "Enter Passcode to View Hidden Apps") { ok in
+                showPasscode = false
+                if ok { reveal() } else { fail() }
+            }
+        }
+    }
+
+    private var grid: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 4), spacing: 24) {
+            ForEach(Array(sortedHidden.enumerated()), id: \.element.id) { i, app in
+                VStack(spacing: 6) {
+                    AppIconView(app: app, side: 60)
+                        .contextMenu {
+                            Button("Unhide", systemImage: "eye") { unhideMockApp(app, in: store) }
+                        }
+                    Text(app.name).font(.caption).lineLimit(1)
+                }
+                .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .padding(.vertical, 8)
+        .animation(.spring(response: 0.45, dampingFraction: 0.8), value: unlocked)
     }
 
     private func gate() async {

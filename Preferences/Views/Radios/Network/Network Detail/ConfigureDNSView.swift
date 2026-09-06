@@ -8,154 +8,130 @@
 import SwiftUI
 
 struct ConfigureDNSView: View {
-    @Environment(\.dismiss) private var dismiss
     @Binding var selected: String
-    @FocusState private var focusedServerID: UUID?
-    @FocusState private var focusedSearchDomain: UUID?
-    @State private var currentSelected = "kWFLocSettingsDNSConfigureAutomatic"
-    @State private var DNSServers: [DNSServer] = []
+    @State private var isAutomatic = true
+    @State private var dnsServers: [DNSServer] = []
     @State private var searchDomains: [SearchDomain] = []
-    let options = ["kWFLocSettingsDNSConfigureAutomatic", "kWFLocSettingsDNSConfigureManual"]
-    let path = "/System/Library/PrivateFrameworks/WiFiKitUI.framework"
-    let table = "WiFiKitUILocalizableStrings"
-    
+    @State private var addServerSheet = false
+    @State private var addDomainSheet = false
+    @State private var newServer = ""
+    @State private var newDomain = ""
+
     var body: some View {
-        CustomList(title: "kWFLocSettingsDNSConfigureTitle".localized(path: path, table: table)) {
+        CustomList(title: "Configure DNS", topPadding: true) {
             Section {
-                Picker("kWFLocSettingsDNSConfigureTitle".localized(path: path, table: table), selection: $currentSelected) {
-                    ForEach(options, id: \.self) { option in
-                        Text(option.localized(path: path, table: table))
-                    }
-                }
-                .pickerStyle(.inline)
-                .labelsHidden()
-            }
-            
-            // MARK: DNS Servers
-            Section("kWFLocSettingsDNSSectionHeader".localized(path: path, table: table)) {
-                ForEach(DNSServers) { server in
-                    TextField("0.0.0.0", text: serverBinding(for: server))
-                        .textInputAutocapitalization(.never)
-                        .focused($focusedServerID, equals: server.id)
-                }
-                .onDelete(perform: deleteServer)
-                
-                if currentSelected == "kWFLocSettingsDNSConfigureManual" {
+                Button {
+                    isAutomatic = true
+                } label: {
                     HStack {
-                        Button {
-                            if DNSServers.last?.server.isEmpty == false || DNSServers.isEmpty {
-                                withAnimation {
-                                    addServer()
-                                }
-                            }
-                            focusedServerID = DNSServers.last?.id
-                        } label: {
-                            HStack {
-                                Image(systemName: "plus.circle.fill")
-                                    .foregroundStyle(.white, .green)
-                                    .imageScale(.large)
-                                Text("kWFLocSettingsDNSAddServer".localized(path: path, table: table))
-                            }
-                        }
-                        .foregroundStyle(.primary)
+                        Text("Automatic").foregroundStyle(.primary)
+                        Spacer()
+                        if isAutomatic { Image(systemName: "checkmark").foregroundStyle(.blue) }
                     }
                 }
-            }
-            
-            // MARK: Add Search Domain
-            Section("kWFLocSettingsDNSAddSearchDomain".localized(path: path, table: table)) {
-                ForEach(searchDomains) { domain in
-                    TextField("domain.com", text: domainBinding(for: domain))
-                        .textInputAutocapitalization(.never)
-                        .focused($focusedSearchDomain, equals: domain.id)
-                }
-                .onDelete(perform: deleteDomain)
-                
-                if currentSelected == "kWFLocSettingsDNSConfigureManual" {
+                Button {
+                    isAutomatic = false
+                } label: {
                     HStack {
-                        Button {
-                            if searchDomains.last?.domain.isEmpty == false || searchDomains.isEmpty {
-                                withAnimation {
-                                    addDomain()
-                                }
-                            }
-                            focusedSearchDomain = searchDomains.last?.id
-                        } label: {
-                            HStack {
-                                Image(systemName: "plus.circle.fill")
-                                    .foregroundStyle(.white, .green)
-                                    .imageScale(.large)
-                                Text("kWFLocSettingsDNSAddSearchDomain".localized(path: path, table: table))
-                            }
-                        }
-                        .foregroundStyle(.primary)
+                        Text("Manual").foregroundStyle(.primary)
+                        Spacer()
+                        if !isAutomatic { Image(systemName: "checkmark").foregroundStyle(.blue) }
                     }
                 }
             }
-        }
-        .animation(.default, value: currentSelected)
-        .environment(\.editMode, .constant(.active))
-        .onAppear {
-            if selected != "kWFLocSettingsDNSConfigureAutomatic" {
-                currentSelected = selected
+
+            Section(header: Text("DNS Servers").textCase(nil)) {
+                if !isAutomatic {
+                    ForEach($dnsServers) { $server in
+                        TextField("Server", text: $server.server)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.numbersAndPunctuation)
+                    }
+                    .onDelete { dnsServers.remove(atOffsets: $0) }
+
+                    Button {
+                        addServerSheet = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundStyle(.green)
+                            Text("Add Server")
+                        }
+                    }
+                }
+            }
+
+            Section(header: Text("Search Domains").textCase(nil)) {
+                if !isAutomatic {
+                    ForEach($searchDomains) { $domain in
+                        TextField("Domain", text: $domain.domain)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
+                    .onDelete { searchDomains.remove(atOffsets: $0) }
+
+                    Button {
+                        addDomainSheet = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundStyle(.green)
+                            Text("Add Search Domain")
+                        }
+                    }
+                }
             }
         }
         .toolbar {
-            Button("kWFGlobalProxyCredSave".localized(path: path, table: table)) {
-                selected = currentSelected
-                dismiss()
+            ToolbarItem(placement: .topBarTrailing) {
+                Button("Save") {
+                    selected = isAutomatic ? "kWFLocSettingsDNSSettingsAutomatic" : "kWFLocSettingsDNSSettingsManual"
+                }
+                .fontWeight(.semibold)
             }
-            .disabled(currentSelected == selected)
         }
-    }
-    
-    // MARK: - Functions
-    private func addDomain() {
-        let newDomain = SearchDomain(id: UUID(), domain: "")
-        searchDomains.append(newDomain)
-    }
-    
-    private func addServer() {
-        let newServer = DNSServer(id: UUID(), server: "")
-        DNSServers.append(newServer)
-    }
-    
-    private func domainBinding(for domain: SearchDomain) -> Binding<String> {
-        guard let index = searchDomains.firstIndex(where: { $0.id == domain.id }) else {
-            return .constant("")
+        .onAppear {
+            isAutomatic = !selected.contains("Manual")
         }
-        return $searchDomains[index].domain
-    }
-    
-    private func serverBinding(for server: DNSServer) -> Binding<String> {
-        guard let index = DNSServers.firstIndex(where: { $0.id == server.id }) else {
-            return .constant("")
+        .alert("Add Server", isPresented: $addServerSheet) {
+            TextField("DNS Server", text: $newServer)
+                .keyboardType(.numbersAndPunctuation)
+                .textInputAutocapitalization(.never)
+            Button("Add") {
+                let v = newServer.trimmingCharacters(in: .whitespaces)
+                if !v.isEmpty { dnsServers.append(DNSServer(server: v)) }
+                newServer = ""
+            }
+            Button("Cancel", role: .cancel) { newServer = "" }
         }
-        return $DNSServers[index].server
-    }
-    
-    private func deleteDomain(at offsets: IndexSet) {
-        searchDomains.remove(atOffsets: offsets)
-    }
-    
-    private func deleteServer(at offsets: IndexSet) {
-        DNSServers.remove(atOffsets: offsets)
+        .alert("Add Search Domain", isPresented: $addDomainSheet) {
+            TextField("Domain", text: $newDomain)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            Button("Add") {
+                let v = newDomain.trimmingCharacters(in: .whitespaces)
+                if !v.isEmpty { searchDomains.append(SearchDomain(domain: v)) }
+                newDomain = ""
+            }
+            Button("Cancel", role: .cancel) { newDomain = "" }
+        }
     }
 }
 
 // MARK: - Identifiable structs
 struct DNSServer: Identifiable {
-    let id: UUID
+    var id = UUID()
     var server: String
 }
 
 struct SearchDomain: Identifiable {
-    let id: UUID
+    var id = UUID()
     var domain: String
 }
 
 #Preview {
     NavigationStack {
-        ConfigureDNSView(selected: .constant("kWFLocSettingsDNSConfigureAutomatic"))
+        ConfigureDNSView(selected: .constant("kWFLocSettingsDNSSettingsAutomatic"))
     }
 }
