@@ -151,11 +151,13 @@ struct DeviceDetailView: View {
                 Text("Last iCloud backup: July 12, 2025 at 18:13")
             }
 
-            Section(header: Text("Device Info").textCase(nil)) {
+            Section {
                 LabeledContent("Model", value: identity.modelName ?? device.modelName)
                 LabeledContent("Version", value: "\(device.systemName) \(identity.osVersion ?? device.systemVersion)")
                 LabeledContent("Serial Number", value: identity.serialNumber)
                     .textSelection(.enabled)
+            } header: {
+                Text("Device Info").textCase(nil)
             } footer: {
                 Text("This device is trusted and can receive Apple Account verification codes.")
             }
