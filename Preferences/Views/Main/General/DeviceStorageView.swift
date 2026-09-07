@@ -48,6 +48,8 @@ enum StorageIcon {
     case app(bundleID: String?, symbol: String, tint: String)
     /// Two (side by side) or four (2×2) tiny glyph tiles — grouped developers.
     case multi([(symbol: String, tint: String)])
+    /// Artwork downloaded for an app added by hand.
+    case custom(UIImage)
 }
 
 /// One row of the storage list.
@@ -141,9 +143,12 @@ enum MockStorageCatalog {
 /// recommendations, sortable per-app list, Hidden Apps, and system rows.
 struct DeviceStorageView: View {
     @Environment(SettingsStore.self) private var store
+    @State private var appsStore = StorageAppsStore.shared
     @State private var searchText = ""
     @State private var sort: StorageSort = .size
     @State private var confirmEmpty = false
+    /// iOS shows the first rows and hides the rest behind "See All Apps".
+    @State private var showAllApps = false
 
     private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
     private var deviceName: String { isPad ? "iPad" : "iPhone" }
@@ -152,14 +157,27 @@ struct DeviceStorageView: View {
 
     /// Every row of the list, Photos included.
     ///
-    /// With "Use Real Installed Apps" on, the names and icons come from the
-    /// device itself; sizes and last-used lines are generated from the bundle
-    /// ID so they stay stable. Falls back to the mock catalog whenever the
-    /// lookup is unavailable.
+    /// Detected apps (real name and icon read from the device) are merged
+    /// with the apps added by hand in the hidden Storage panel; anything
+    /// switched off there is left out. Falls back to the mock catalog when
+    /// nothing else is available.
     private var allApps: [StorageEntry] {
+        var entries: [StorageEntry] = []
+        var seen = Set<String>()
+
+        for app in appsStore.customApps where !appsStore.hiddenBundleIDs.contains(app.bundleID) {
+            guard seen.insert(app.bundleID).inserted else { continue }
+            let icon: StorageIcon = appsStore.icon(for: app.bundleID).map { StorageIcon.custom($0) }
+                ?? .app(bundleID: app.bundleID, symbol: "app.fill", tint: "8E8E93")
+            entries.append(StorageEntry(id: app.bundleID, name: app.name, icon: icon,
+                                        bytes: app.bundleID == MockStorageCatalog.photosID ? photosBytes : app.bytes,
+                                        lastUsed: app.lastUsed))
+        }
+
         if store.useRealApps, let installed = InstalledAppsReader.visibleApps {
-            return installed.map { app in
-                StorageEntry(
+            for app in installed where !appsStore.hiddenBundleIDs.contains(app.bundleID) {
+                guard seen.insert(app.bundleID).inserted else { continue }
+                entries.append(StorageEntry(
                     id: app.bundleID,
                     name: app.name,
                     icon: .app(bundleID: app.bundleID, symbol: "app.fill", tint: "8E8E93"),
@@ -167,11 +185,16 @@ struct DeviceStorageView: View {
                         ? photosBytes
                         : InstalledAppsReader.mockBytes(for: app.bundleID),
                     lastUsed: InstalledAppsReader.mockLastUsed(for: app.bundleID)
-                )
+                ))
             }
         }
-        return [MockStorageCatalog.photosRow(gb: settings.photosGB)] + MockStorageCatalog.apps
+
+        if entries.isEmpty {
+            return [MockStorageCatalog.photosRow(gb: settings.photosGB)] + MockStorageCatalog.apps
+        }
+        return entries
     }
+
     /// Applications category: everything except the Photos row.
     private var applicationsBytes: Int64 {
         allApps.filter { $0.id != MockStorageCatalog.photosID }.reduce(0) { $0 + $1.bytes }
@@ -194,6 +217,15 @@ struct DeviceStorageView: View {
         }
     }
 
+    /// First 20 rows until "See All Apps" is tapped; search always shows all.
+    private var listedApps: [StorageEntry] {
+        guard searchText.isEmpty, !showAllApps else { return visibleApps }
+        return Array(visibleApps.prefix(20))
+    }
+    private var canShowMore: Bool {
+        searchText.isEmpty && !showAllApps && visibleApps.count > 20
+    }
+
     private var showsRecommendations: Bool {
         settings.showRecommendations && (settings.reviewPhotosEnabled || settings.recentlyDeletedEnabled)
     }
@@ -209,11 +241,16 @@ struct DeviceStorageView: View {
 
             // MARK: App list
             Section {
-                ForEach(visibleApps) { entry in
+                ForEach(listedApps) { entry in
                     RouteLink("Storage/App/\(entry.id)") {
                         AppStorageDetailView(entry: entry)
                     } label: {
                         appRow(entry)
+                    }
+                }
+                if canShowMore {
+                    Button("See All Apps") {
+                        withAnimation { showAllApps = true }
                     }
                 }
             } header: {
@@ -468,6 +505,12 @@ struct StorageIconView: View {
             } else {
                 tile(symbol, tint, side: 29)
             }
+        case .custom(let image):
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 29, height: 29)
+                .clipShape(RoundedRectangle(cornerRadius: 6.5, style: .continuous))
         case .multi(let items):
             if items.count <= 2 {
                 HStack(spacing: 3) {

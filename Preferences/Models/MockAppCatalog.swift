@@ -452,3 +452,184 @@ enum InstalledAppsReader {
         }
     }
 }
+
+// MARK: - Apps added by hand to Storage
+
+/// An app the user added to Settings > Storage, with the icon fetched from
+/// the App Store rather than hunted down by hand.
+struct CustomStorageApp: Codable, Identifiable, Hashable {
+    var bundleID: String
+    var name: String
+    var bytes: Int64
+    var lastUsed: String?
+    var id: String { bundleID }
+}
+
+/// One hit from the public iTunes Search API.
+struct AppStoreResult: Identifiable, Hashable {
+    let bundleID: String
+    let name: String
+    let artworkURL: URL
+    let bytes: Int64
+    var id: String { bundleID }
+}
+
+/// Looks apps up on the public iTunes Search API (no key, no sign-in) so an
+/// app can be added with its real name, icon and download size.
+///
+/// iOS does not let a sandboxed app enumerate third-party apps, so this is
+/// how games and other App Store apps get into the Storage list.
+enum AppStoreLookup {
+    /// Apps matching a search term, best match first.
+    static func search(_ term: String, country: String = "us") async -> [AppStoreResult] {
+        let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              var components = URLComponents(string: "https://itunes.apple.com/search")
+        else { return [] }
+        components.queryItems = [
+            URLQueryItem(name: "term", value: trimmed),
+            URLQueryItem(name: "entity", value: "software"),
+            URLQueryItem(name: "limit", value: "25"),
+            URLQueryItem(name: "country", value: country)
+        ]
+        guard let url = components.url else { return [] }
+        return await query(url)
+    }
+
+    /// The app with this exact bundle ID, if it is on the store.
+    static func lookup(bundleID: String, country: String = "us") async -> AppStoreResult? {
+        guard var components = URLComponents(string: "https://itunes.apple.com/lookup") else { return nil }
+        components.queryItems = [
+            URLQueryItem(name: "bundleId", value: bundleID),
+            URLQueryItem(name: "country", value: country)
+        ]
+        guard let url = components.url else { return nil }
+        return await query(url).first
+    }
+
+    static func iconData(from url: URL) async -> Data? {
+        try? await URLSession.shared.data(from: url).0
+    }
+
+    private static func query(_ url: URL) async -> [AppStoreResult] {
+        guard let data = try? await URLSession.shared.data(from: url).0,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let items = json["results"] as? [[String: Any]]
+        else { return [] }
+
+        return items.compactMap { item in
+            guard let bundleID = item["bundleId"] as? String,
+                  let name = item["trackName"] as? String
+            else { return nil }
+            let artwork = (item["artworkUrl512"] as? String)
+                ?? (item["artworkUrl100"] as? String)
+                ?? (item["artworkUrl60"] as? String)
+            guard let artwork, let artworkURL = URL(string: artwork) else { return nil }
+            var bytes: Int64 = 0
+            if let text = item["fileSizeBytes"] as? String, let value = Int64(text) { bytes = value }
+            else if let value = item["fileSizeBytes"] as? Int64 { bytes = value }
+            return AppStoreResult(bundleID: bundleID, name: name, artworkURL: artworkURL, bytes: bytes)
+        }
+    }
+}
+
+/// Storage list contents the user controls: apps added by hand, apps hidden
+/// from the list, and per-app size overrides. Icons live as PNGs on disk.
+@MainActor
+@Observable
+final class StorageAppsStore {
+    static let shared = StorageAppsStore()
+
+    private(set) var customApps: [CustomStorageApp] = []
+    var hiddenBundleIDs: Set<String> = [] {
+        didSet { persist(Array(hiddenBundleIDs), key: Self.hiddenKey) }
+    }
+
+    @ObservationIgnored private var iconCache: [String: UIImage] = [:]
+
+    private static let appsKey = "storage.customApps"
+    private static let hiddenKey = "storage.hiddenApps"
+
+    private let directory: URL = {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let dir = base.appending(path: "StorageIcons", directoryHint: .isDirectory)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }()
+
+    private init() {
+        customApps = Self.load([CustomStorageApp].self, key: Self.appsKey) ?? []
+        hiddenBundleIDs = Set(Self.load([String].self, key: Self.hiddenKey) ?? [])
+    }
+
+    // MARK: Icons
+
+    private func iconURL(_ bundleID: String) -> URL {
+        directory.appending(path: "\(bundleID).png")
+    }
+
+    /// Icon for an added app, loaded from disk once and kept in memory.
+    func icon(for bundleID: String) -> UIImage? {
+        if let cached = iconCache[bundleID] { return cached }
+        guard let image = UIImage(contentsOfFile: iconURL(bundleID).path) else { return nil }
+        iconCache[bundleID] = image
+        return image
+    }
+
+    // MARK: Editing
+
+    func add(_ result: AppStoreResult, iconData: Data?) {
+        if let iconData {
+            try? iconData.write(to: iconURL(result.bundleID), options: .atomic)
+            iconCache[result.bundleID] = UIImage(data: iconData)
+        }
+        let app = CustomStorageApp(bundleID: result.bundleID,
+                                   name: result.name,
+                                   bytes: result.bytes > 0 ? result.bytes : InstalledAppsReader.mockBytes(for: result.bundleID),
+                                   lastUsed: InstalledAppsReader.mockLastUsed(for: result.bundleID))
+        if let index = customApps.firstIndex(where: { $0.bundleID == app.bundleID }) {
+            customApps[index] = app
+        } else {
+            customApps.append(app)
+        }
+        hiddenBundleIDs.remove(app.bundleID)
+        persistApps()
+    }
+
+    func remove(_ bundleID: String) {
+        customApps.removeAll { $0.bundleID == bundleID }
+        iconCache[bundleID] = nil
+        try? FileManager.default.removeItem(at: iconURL(bundleID))
+        persistApps()
+    }
+
+    func setBytes(_ bytes: Int64, for bundleID: String) {
+        guard let index = customApps.firstIndex(where: { $0.bundleID == bundleID }) else { return }
+        customApps[index].bytes = max(0, bytes)
+        persistApps()
+    }
+
+    func setHidden(_ hidden: Bool, for bundleID: String) {
+        if hidden { hiddenBundleIDs.insert(bundleID) } else { hiddenBundleIDs.remove(bundleID) }
+    }
+
+    func removeAll() {
+        for app in customApps { try? FileManager.default.removeItem(at: iconURL(app.bundleID)) }
+        customApps = []
+        iconCache = [:]
+        hiddenBundleIDs = []
+        persistApps()
+    }
+
+    // MARK: Persistence
+
+    private func persistApps() { persist(customApps, key: Self.appsKey) }
+
+    private func persist<T: Encodable>(_ value: T, key: String) {
+        UserDefaults.standard.set(try? JSONEncoder().encode(value), forKey: key)
+    }
+
+    private static func load<T: Decodable>(_ type: T.Type, key: String) -> T? {
+        UserDefaults.standard.data(forKey: key).flatMap { try? JSONDecoder().decode(type, from: $0) }
+    }
+}

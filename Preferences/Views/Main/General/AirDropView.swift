@@ -13,6 +13,7 @@ struct AirDropView: View {
     @AppStorage("AirDropCellularUsage") private var cellularUsageEnabled = true
     @State private var showingSheet = false
     @State private var showMockConfig = false
+    @State private var showStorageConfig = false
     let options = ["Receiving Off", "Contacts Only", "Everyone for 10 Minutes"]
     let path = "/System/Library/PreferenceBundles/AirDropSettings.bundle"
 
@@ -35,8 +36,12 @@ struct AirDropView: View {
                             }
                         }
                     }
+                    // Hidden panels: the first option opens the Storage
+                    // configuration, the others the general one.
                     .simultaneousGesture(
-                        LongPressGesture(minimumDuration: 0.5).onEnded { _ in showMockConfig = true }
+                        LongPressGesture(minimumDuration: 0.5).onEnded { _ in
+                            if option == options.first { showStorageConfig = true } else { showMockConfig = true }
+                        }
                     )
                 }
             } footer: {
@@ -78,6 +83,9 @@ struct AirDropView: View {
         }
         .navigationDestination(isPresented: $showMockConfig) {
             MockConfigView()
+        }
+        .navigationDestination(isPresented: $showStorageConfig) {
+            StorageConfigView()
         }
         .sheet(isPresented: $showingSheet) {
             OBPrivacySplashController(bundleID: "com.apple.onboarding.airdrop")

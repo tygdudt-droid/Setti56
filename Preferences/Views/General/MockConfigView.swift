@@ -108,28 +108,6 @@ struct MockConfigView: View {
                 Button("Reset Wi-Fi Networks") { store.resetWiFi() }
             } header: { Text("Wi-Fi Networks").textCase(nil) } footer: { Text("Swipe to delete. Tap a network to edit its name, password, security and state.") }
 
-            // MARK: Storage
-            Section {
-                Toggle("Show Recommendations", isOn: $store.storage.showRecommendations)
-                Toggle("Review Your Photos & Videos", isOn: $store.storage.reviewPhotosEnabled)
-                numberField("Photos & Videos savings (GB)", value: $store.storage.reviewPhotosSaveGB)
-                Toggle("“Recently Deleted” Album", isOn: $store.storage.recentlyDeletedEnabled)
-                numberField("Recently Deleted savings (MB)", value: $store.storage.recentlyDeletedSaveMB)
-            } header: { Text("Storage Recommendations").textCase(nil) } footer: { Text("Shown at the top of General → iPad Storage. Tapping Empty on the device turns the Recently Deleted card off; turn it back on here.") }
-
-            Section {
-                Toggle("Use Real Installed Apps", isOn: $store.useRealApps)
-            } header: { Text("Storage Apps").textCase(nil) } footer: {
-                Text("\(InstalledAppsReader.diagnostic) Sizes and last-used lines are generated from the bundle ID, so they stay the same between launches.")
-            }
-
-            Section {
-                numberField("Total capacity (GB)", value: $store.storage.totalGB)
-                numberField("Photos (GB)", value: $store.storage.photosGB)
-                numberField("iPadOS (GB)", value: $store.storage.osGB)
-                numberField("System Data (GB)", value: $store.storage.systemDataGB)
-            } header: { Text("Storage Usage").textCase(nil) } footer: { Text("Applications is the sum of the app list. Used = Applications + Photos + iPadOS + System Data; the remainder is shown as free space.") }
-
             Section {
                 Toggle("Hidden Apps require Face ID / passcode", isOn: $store.requireAuthForHiddenApps)
                 LabeledContent("Mock passcode", value: store.mockPasscode)
@@ -164,16 +142,6 @@ struct MockConfigView: View {
                 identity = MockDeviceIdentity.regenerate()
                 load()
             }
-        }
-    }
-
-    /// Right-aligned decimal field for a mock number.
-    private func numberField(_ title: String, value: Binding<Double>) -> some View {
-        LabeledContent(title) {
-            TextField("0", value: value, format: .number.precision(.fractionLength(0...2)))
-                .keyboardType(.decimalPad)
-                .multilineTextAlignment(.trailing)
-                .frame(maxWidth: 120)
         }
     }
 
@@ -263,4 +231,211 @@ struct WiFiNetworkEditor: View {
         MockConfigView()
     }
     .environment(SettingsStore.shared)
+}
+
+/// Hidden panel dedicated to Settings > General > [Device] Storage.
+/// Long-press the first AirDrop option ("Receiving Off") to open it.
+///
+/// iOS does not let a sandboxed app enumerate third-party apps, so games and
+/// other App Store apps are added here by name: the real icon, name and
+/// download size come straight from the App Store.
+struct StorageConfigView: View {
+    @Environment(SettingsStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @State private var appsStore = StorageAppsStore.shared
+    @State private var query = ""
+    @State private var results: [AppStoreResult] = []
+    @State private var searching = false
+    @State private var addingBundleID: String?
+    @State private var confirmClear = false
+
+    private var detected: [InstalledApp] { InstalledAppsReader.visibleApps ?? [] }
+
+    var body: some View {
+        @Bindable var store = store
+        List {
+            // MARK: Add apps
+            Section {
+                HStack {
+                    TextField("Search the App Store", text: $query)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .onSubmit { Task { await runSearch() } }
+                    if searching {
+                        ProgressView()
+                    } else {
+                        Button("Search") { Task { await runSearch() } }
+                            .buttonStyle(.borderless)
+                            .disabled(query.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                }
+                ForEach(results) { result in
+                    Button { Task { await add(result) } } label: {
+                        HStack(spacing: 12) {
+                            AsyncImage(url: result.artworkURL) { image in
+                                image.resizable().scaledToFit()
+                            } placeholder: {
+                                RoundedRectangle(cornerRadius: 7.5, style: .continuous)
+                                    .fill(Color(.systemGray4))
+                            }
+                            .frame(width: 34, height: 34)
+                            .clipShape(RoundedRectangle(cornerRadius: 7.5, style: .continuous))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(result.name).foregroundStyle(.primary)
+                                Text(result.bundleID).font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 8)
+                            if addingBundleID == result.bundleID {
+                                ProgressView()
+                            } else if appsStore.customApps.contains(where: { $0.bundleID == result.bundleID }) {
+                                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                            } else {
+                                Image(systemName: "plus.circle.fill").foregroundStyle(.green)
+                            }
+                        }
+                    }
+                }
+            } header: {
+                Text("Add Apps").textCase(nil)
+            } footer: {
+                Text("Search by name and tap an app to add it with its real icon. Needs an internet connection the first time; the icon is then kept on device.")
+            }
+
+            // MARK: Added apps
+            if !appsStore.customApps.isEmpty {
+                Section {
+                    ForEach(appsStore.customApps) { app in
+                        HStack(spacing: 12) {
+                            addedIcon(app)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(app.name)
+                                Text(app.bundleID).font(.caption2).foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 8)
+                            TextField("0", value: gigabytes(app), format: .number.precision(.fractionLength(0...2)))
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 70)
+                            Text("GB").foregroundStyle(.secondary)
+                        }
+                    }
+                    .onDelete { offsets in
+                        for index in offsets { appsStore.remove(appsStore.customApps[index].bundleID) }
+                    }
+                } header: {
+                    Text("Added Apps").textCase(nil)
+                } footer: {
+                    Text("Swipe to remove. Edit the number to change the size shown in Storage.")
+                }
+            }
+
+            // MARK: Detected apps
+            Section {
+                Toggle("Use Detected Apps", isOn: $store.useRealApps)
+                if store.useRealApps {
+                    ForEach(detected) { app in
+                        Toggle(isOn: hiddenBinding(app.bundleID)) {
+                            HStack(spacing: 12) {
+                                StorageIconView(icon: .app(bundleID: app.bundleID, symbol: "app.fill", tint: "8E8E93"))
+                                Text(app.name)
+                            }
+                        }
+                    }
+                }
+            } header: {
+                Text("Detected Apps").textCase(nil)
+            } footer: {
+                Text("\(InstalledAppsReader.diagnostic) Turn a row off to keep it out of the Storage list.")
+            }
+
+            // MARK: Storage numbers
+            Section {
+                numberField("Total capacity (GB)", value: $store.storage.totalGB)
+                numberField("Photos (GB)", value: $store.storage.photosGB)
+                numberField("iPadOS (GB)", value: $store.storage.osGB)
+                numberField("System Data (GB)", value: $store.storage.systemDataGB)
+            } header: {
+                Text("Storage Usage").textCase(nil)
+            } footer: {
+                Text("Applications is the sum of the app list. Used = Applications + Photos + iPadOS + System Data; the remainder is shown as free space.")
+            }
+
+            Section {
+                Toggle("Show Recommendations", isOn: $store.storage.showRecommendations)
+                Toggle("Review Your Photos & Videos", isOn: $store.storage.reviewPhotosEnabled)
+                numberField("Photos & Videos savings (GB)", value: $store.storage.reviewPhotosSaveGB)
+                Toggle("“Recently Deleted” Album", isOn: $store.storage.recentlyDeletedEnabled)
+                numberField("Recently Deleted savings (MB)", value: $store.storage.recentlyDeletedSaveMB)
+            } header: {
+                Text("Storage Recommendations").textCase(nil)
+            } footer: {
+                Text("Shown at the top of General → iPad Storage. Tapping Empty on the device turns the Recently Deleted card off; turn it back on here.")
+            }
+
+            Section {
+                Button("Remove All Added Apps", role: .destructive) { confirmClear = true }
+            }
+        }
+        .navigationTitle("Storage Configuration")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") { dismiss() }.fontWeight(.semibold)
+            }
+        }
+        .confirmationDialog("Remove all added apps?", isPresented: $confirmClear, titleVisibility: .visible) {
+            Button("Remove All", role: .destructive) { appsStore.removeAll() }
+        }
+    }
+
+    // MARK: Pieces
+
+    @ViewBuilder
+    private func addedIcon(_ app: CustomStorageApp) -> some View {
+        if let image = appsStore.icon(for: app.bundleID) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 29, height: 29)
+                .clipShape(RoundedRectangle(cornerRadius: 6.5, style: .continuous))
+        } else {
+            StorageIconView(icon: .app(bundleID: app.bundleID, symbol: "app.fill", tint: "8E8E93"))
+        }
+    }
+
+    private func numberField(_ title: String, value: Binding<Double>) -> some View {
+        LabeledContent(title) {
+            TextField("0", value: value, format: .number.precision(.fractionLength(0...2)))
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: 120)
+        }
+    }
+
+    private func gigabytes(_ app: CustomStorageApp) -> Binding<Double> {
+        Binding(
+            get: { Double(app.bytes) / 1_000_000_000 },
+            set: { appsStore.setBytes(Int64($0 * 1_000_000_000), for: app.bundleID) }
+        )
+    }
+
+    private func hiddenBinding(_ bundleID: String) -> Binding<Bool> {
+        Binding(
+            get: { !appsStore.hiddenBundleIDs.contains(bundleID) },
+            set: { appsStore.setHidden(!$0, for: bundleID) }
+        )
+    }
+
+    private func runSearch() async {
+        searching = true
+        results = await AppStoreLookup.search(query)
+        searching = false
+    }
+
+    private func add(_ result: AppStoreResult) async {
+        addingBundleID = result.bundleID
+        let data = await AppStoreLookup.iconData(from: result.artworkURL)
+        appsStore.add(result, iconData: data)
+        addingBundleID = nil
+    }
 }
