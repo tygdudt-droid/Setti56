@@ -1,27 +1,29 @@
 import SwiftUI
 
-/// Daily Usage chart: one two-tone gray bar per day, today's bar orange,
-/// a thin "Average" line, weekday initials and (on the full report) date
-/// sub-labels, right-hand percentage labels and the selected-day callout.
+/// Daily Usage chart: one two-tone gray bar per day. The selected day is
+/// drawn in the highlight color (orange when the day used more battery than
+/// usual, blue otherwise) together with its label, rule and callout.
 struct BatteryDailyUsageChart: View {
     let days: [BatteryDay]
     let average: Int
-    /// Shows 150% / 75% / 0% labels, date sub-labels and the callout.
+    /// Full report style: percent axis labels, date sub-labels and callout.
     var detailed = false
     /// Index of the highlighted day; tapping a column changes it.
     @Binding var selection: Int
+    /// Color of the selected day.
+    var highlight: Color = BatteryPalette.high
     var plotHeight: CGFloat = 150
     var maxValue: Int = 150
 
-    private let labelWidth: CGFloat = 52
-    private var lastIndex: Int { days.count - 1 }
+    private var lastIndex: Int { max(0, days.count - 1) }
+    private var selected: Int { min(max(selection, 0), lastIndex) }
 
     var body: some View {
         HStack(alignment: .top, spacing: 4) {
             GeometryReader { geo in
                 let width = geo.size.width
                 let colWidth = width / CGFloat(max(1, days.count))
-                let barWidth = colWidth * 0.28
+                let barWidth = min(22, colWidth * 0.26)
                 ZStack(alignment: .topLeading) {
                     // Grid
                     ForEach([maxValue, maxValue / 2, 0], id: \.self) { value in
@@ -30,50 +32,52 @@ struct BatteryDailyUsageChart: View {
                             .frame(height: 0.5)
                             .offset(y: y(for: Double(value)))
                     }
-                    // Average line
-                    Rectangle()
-                        .fill(Color(white: 0.45))
-                        .frame(height: 0.5)
-                        .offset(y: y(for: Double(average)))
-                    // Bars — every day uses the same two grays; only the
-                    // selected day is orange. Colors never depend on value.
-                    ForEach(Array(days.enumerated()), id: \.offset) { i, day in
-                        let isSelected = i == selection
-                        let x = CGFloat(i) * colWidth + (colWidth - barWidth) / 2
-                        VStack(spacing: 0) {
-                            Rectangle()
-                                .fill(isSelected ? BatteryPalette.today : BatteryPalette.allDayBar)
-                                .frame(height: height(for: Double(day.allDay - day.dailyByNow)))
-                            Rectangle()
-                                .fill(isSelected ? BatteryPalette.today : BatteryPalette.dailyBar)
-                                .frame(height: height(for: Double(day.dailyByNow)))
-                        }
-                        .frame(width: barWidth, height: plotHeight, alignment: .bottom)
-                        .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
-                        .offset(x: x)
-                    }
-                    // Callout for the selected day (orange rule + value)
-                    if detailed {
-                        let day = days[min(selection, lastIndex)]
-                        let x = CGFloat(min(selection, lastIndex)) * colWidth + colWidth / 2
+                    // Average line (compact card only — the report uses the axis)
+                    if !detailed {
                         Rectangle()
-                            .fill(BatteryPalette.today)
-                            .frame(width: 1.5, height: plotHeight)
-                            .offset(x: x - 0.75)
-                        VStack(alignment: .trailing, spacing: 0) {
+                            .fill(Color(white: 0.42))
+                            .frame(height: 0.5)
+                            .offset(y: y(for: Double(average)))
+                    }
+                    // Bars: identical grays for every day, highlight for the
+                    // selected one. Color never depends on the value itself.
+                    ForEach(Array(days.enumerated()), id: \.offset) { i, day in
+                        if day.allDay > 0 {
+                            let isSelected = i == selected
+                            let x = CGFloat(i) * colWidth + (colWidth - barWidth) / 2
+                            VStack(spacing: 0) {
+                                Rectangle()
+                                    .fill(isSelected ? highlight : BatteryPalette.allDayBar)
+                                    .frame(height: height(for: Double(day.allDay - day.byEndOfDay)))
+                                Rectangle()
+                                    .fill(isSelected ? highlight : BatteryPalette.dailyBar)
+                                    .frame(height: height(for: Double(day.byEndOfDay)))
+                            }
+                            .frame(width: barWidth, height: plotHeight, alignment: .bottom)
+                            .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
+                            .offset(x: x)
+                        }
+                    }
+                    // Callout: rule through the column with the value to its left.
+                    if detailed {
+                        let day = days[selected]
+                        let x = CGFloat(selected) * colWidth + colWidth / 2
+                        Rectangle()
+                            .fill(highlight)
+                            .frame(width: 2, height: plotHeight + 70)
+                            .offset(x: x - 1, y: -70)
+                        VStack(alignment: .trailing, spacing: 2) {
                             Text("\(day.allDay)%")
-                                .font(.title2)
-                                .foregroundStyle(BatteryPalette.today)
+                                .font(.system(size: 30, weight: .regular))
+                                .foregroundStyle(highlight)
                             Text(Self.calloutDate(day.date))
-                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
-                        .frame(width: 180, alignment: .trailing)
-                        .offset(x: max(0, x - 190), y: -62)
+                        .frame(width: 200, alignment: .trailing)
+                        .offset(x: max(-8, x - 212), y: -78)
                     }
-                    // X labels
+                    // X labels, centered under each column
                     ForEach(Array(days.enumerated()), id: \.offset) { i, day in
-                        let highlighted = i == selection && (detailed || selection != lastIndex)
                         VStack(spacing: 2) {
                             Text(Self.weekdayInitial(day.date))
                             if detailed, let sub = dateSubLabel(at: i) {
@@ -81,11 +85,11 @@ struct BatteryDailyUsageChart: View {
                             }
                         }
                         .font(.subheadline)
-                        .foregroundStyle(highlighted ? BatteryPalette.today : .secondary)
+                        .foregroundStyle(i == selected ? highlight : .secondary)
                         .frame(width: colWidth)
                         .offset(x: CGFloat(i) * colWidth, y: plotHeight + 6)
                     }
-                    // Tap targets — the whole column, including its label.
+                    // Tap targets covering each whole column and its label
                     HStack(spacing: 0) {
                         ForEach(Array(days.enumerated()), id: \.offset) { i, _ in
                             Rectangle()
@@ -117,7 +121,7 @@ struct BatteryDailyUsageChart: View {
                         .offset(y: y(for: Double(average)) - 9)
                 }
             }
-            .frame(width: detailed ? labelWidth : 74,
+            .frame(width: detailed ? 52 : 74,
                    height: plotHeight + (detailed ? 46 : 28),
                    alignment: .topLeading)
         }
@@ -156,12 +160,15 @@ struct BatteryDailyUsageChart: View {
     }
 }
 
-/// "● All Day   ● Daily by 18:24"
+/// "● All Day   ● Daily by 01:24" (card) or "● All Day   ● Usage by End of
+/// Day" (full report).
 struct BatteryUsageLegend: View {
+    var detailed = false
+
     var body: some View {
         HStack(spacing: 18) {
             item(BatteryPalette.allDayBar, "All Day")
-            item(BatteryPalette.dailyBar, "Daily by \(BatteryDataProvider.nowLabel)")
+            item(BatteryPalette.dailyBar, detailed ? "Usage by End of Day" : "Daily by \(BatteryDataProvider.nowLabel)")
         }
         .font(.subheadline)
         .foregroundStyle(.secondary)
@@ -175,31 +182,28 @@ struct BatteryUsageLegend: View {
     }
 }
 
-/// Hourly battery level for today, with green charging bands (⚡) above the
-/// bars and a yellow bar for Low Power Mode.
+/// Hourly battery level for one day, with green charging bands (⚡, or ⏸
+/// when charging was held back) and a yellow bar for Low Power Mode.
 struct BatteryHourlyChart: View {
     let hours: [BatteryHour]
     let sessions: [ChargingSession]
     var plotHeight: CGFloat = 150
 
-    private let labelWidth: CGFloat = 52
-    private let bandHeight: CGFloat = 11
+    private let bandHeight: CGFloat = 12
 
     var body: some View {
         HStack(alignment: .top, spacing: 4) {
             GeometryReader { geo in
                 let width = geo.size.width
                 let colWidth = width / 24
-                let barWidth = colWidth * 0.62
+                let barWidth = colWidth * 0.66
                 ZStack(alignment: .topLeading) {
-                    // Grid
                     ForEach([100, 50, 0], id: \.self) { value in
                         Rectangle()
                             .fill(BatteryPalette.grid)
                             .frame(height: 0.5)
                             .offset(y: y(for: Double(value)))
                     }
-                    // Bars
                     ForEach(hours) { hour in
                         if hour.state != .none {
                             let x = CGFloat(hour.hour) * colWidth + (colWidth - barWidth) / 2
@@ -209,21 +213,19 @@ struct BatteryHourlyChart: View {
                                 .offset(x: x, y: y(for: Double(hour.level)))
                         }
                     }
-                    // Charging bands
                     ForEach(sessions) { session in
-                        let x = CGFloat(session.start) * colWidth + colWidth * 0.12
-                        let w = CGFloat(session.end - session.start + 1) * colWidth - colWidth * 0.24
+                        let x = CGFloat(session.start) * colWidth + colWidth * 0.1
+                        let w = CGFloat(session.end - session.start + 1) * colWidth - colWidth * 0.2
                         ZStack {
                             RoundedRectangle(cornerRadius: bandHeight / 2, style: .continuous)
-                                .fill(BatteryPalette.chargingBand)
-                            Image(systemName: "bolt.fill")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(BatteryPalette.charging)
+                                .fill(session.paused ? Color(white: 0.30) : BatteryPalette.chargingBand)
+                            Image(systemName: session.paused ? "pause.fill" : "bolt.fill")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(session.paused ? Color.white : BatteryPalette.charging)
                         }
-                        .frame(width: max(0, w), height: bandHeight)
+                        .frame(width: max(bandHeight, w), height: bandHeight)
                         .offset(x: x, y: -bandHeight / 2)
                     }
-                    // X labels
                     ForEach([0, 6, 12, 18], id: \.self) { h in
                         Text(String(format: "%02d", h))
                             .font(.subheadline)
@@ -242,7 +244,7 @@ struct BatteryHourlyChart: View {
                         .offset(y: y(for: Double(value)) - 9)
                 }
             }
-            .frame(width: labelWidth, height: plotHeight + 28, alignment: .topLeading)
+            .frame(width: 52, height: plotHeight + 28, alignment: .topLeading)
         }
         .padding(.top, bandHeight)
     }
@@ -291,10 +293,10 @@ struct BatteryAppRow: View {
             HStack(spacing: 5) {
                 if usage.warning {
                     Image(systemName: "exclamationmark.circle.fill")
-                        .foregroundStyle(BatteryPalette.today)
+                        .foregroundStyle(BatteryPalette.high)
                 }
                 Text("\(usage.percent)%")
-                    .foregroundStyle(usage.warning ? BatteryPalette.today : .secondary)
+                    .foregroundStyle(usage.warning ? BatteryPalette.high : .secondary)
             }
         }
         .padding(.vertical, 2)

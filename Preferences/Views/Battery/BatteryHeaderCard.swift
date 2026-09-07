@@ -1,15 +1,21 @@
 import SwiftUI
 
-/// Top card of Settings > Battery: big percentage (read from the real
-/// device when available), ⓘ button, last-charge line and the level track.
+/// Top card of Settings > Battery: the real charge level, ⓘ button, the
+/// charging line and the level track.
+///
+/// Three states, like iPadOS: plugged in ("⚡ Charging" with a green track
+/// and the 100% target on the right), full ("⚡ Fully Charged", track filled
+/// green) and unplugged ("Last Charged to X%: 1h ago", gray track).
 struct BatteryHeaderCard: View {
     let data: BatteryDataProvider
     @State private var liveLevel: Int? = DeviceBattery.level
     @State private var charging = DeviceBattery.isCharging
+    @State private var full = DeviceBattery.isFull
     @State private var showingInfo = false
 
     /// Real level on device, mock value in the Simulator.
-    private var level: Int { liveLevel ?? data.currentLevel }
+    private var level: Int { liveLevel ?? data.mockLevel }
+    private var pluggedIn: Bool { charging || full }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -21,11 +27,6 @@ struct BatteryHeaderCard: View {
                     Text("%")
                         .font(.system(size: 20, weight: .bold))
                         .foregroundStyle(.secondary)
-                    if charging {
-                        Image(systemName: "bolt.fill")
-                            .font(.subheadline)
-                            .foregroundStyle(BatteryPalette.charging)
-                    }
                 }
                 Spacer()
                 Button { showingInfo = true } label: {
@@ -37,11 +38,26 @@ struct BatteryHeaderCard: View {
                 .buttonStyle(.plain)
             }
 
-            Text(DeviceBattery.chargeLine(fallbackTo: data.lastChargedTo, ago: data.lastChargedAgo))
-                .padding(.top, 4)
+            HStack(spacing: 0) {
+                if pluggedIn {
+                    HStack(spacing: 4) {
+                        Image(systemName: "bolt.fill")
+                            .font(.subheadline)
+                        Text(full ? "Fully Charged" : "Charging")
+                    }
+                    .foregroundStyle(BatteryPalette.charging)
+                } else {
+                    Text("Last Charged to \(DeviceBattery.lastChargedTo)%: \(DeviceBattery.lastChargedAgo)")
+                }
+                Spacer()
+                if charging {
+                    Text("100%").foregroundStyle(.secondary)
+                }
+            }
+            .padding(.top, 4)
 
             levelTrack
-                .padding(.top, 14)
+                .padding(.top, 12)
         }
         .padding(.vertical, 4)
         .onAppear { refresh() }
@@ -59,50 +75,54 @@ struct BatteryHeaderCard: View {
     }
 
     private func refresh() {
+        DeviceBattery.recordIfCharging()
         withAnimation(.easeInOut(duration: 0.25)) {
             liveLevel = DeviceBattery.level
             charging = DeviceBattery.isCharging
+            full = DeviceBattery.isFull
         }
     }
 
     private var levelTrack: some View {
         GeometryReader { geo in
             let filled = geo.size.width * CGFloat(level) / 100
-            HStack(spacing: 0) {
-                Rectangle().fill(Color(white: 0.55)).frame(width: filled)
-                Rectangle().fill(Color(white: 0.34))
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color(white: 0.34))
+                Capsule()
+                    .fill(pluggedIn ? BatteryPalette.charging : Color(white: 0.55))
+                    .frame(width: filled)
             }
-            .clipShape(RoundedRectangle(cornerRadius: 3, style: .continuous))
         }
-        .frame(height: 6)
+        .frame(height: 7)
     }
 }
 
-/// The "Daily Usage" card body shared by Battery and Battery Usage:
-/// the sentence, Average / selected-day figures, chart and legend.
+/// The "Daily Usage" card body shared by Battery and Battery Usage: the
+/// sentence, Average / selected-day figures, chart and legend.
 struct BatteryDailyUsageCard: View {
     let data: BatteryDataProvider
     /// Full report style (percent axis labels, date sub-labels, callout).
     var detailed = false
     @Binding var selection: Int
 
-    private var selectedDay: BatteryDay { data.days[min(selection, data.days.count - 1)] }
-    private var isToday: Bool { selection == data.days.count - 1 }
+    private var index: Int { min(max(selection, 0), data.days.count - 1) }
+    private var day: BatteryDay { data.days[index] }
+    private var isToday: Bool { index == data.todayIndex }
+    private var highlight: Color { data.highlightColor(for: day) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(detailed ? String(data.usageSentence.dropLast()) : data.usageSentence)
+            Text(data.sentence(for: day, index: index))
                 .padding(.bottom, detailed ? 0 : 14)
 
             if !detailed {
                 Divider()
                     .padding(.bottom, 14)
                 HStack(alignment: .top, spacing: 0) {
-                    figure("Average", "\(data.averagePercent)", color: .primary, labelColor: .secondary)
+                    figure("Average", data.averagePercent, color: .primary, labelColor: .secondary)
                         .frame(width: 128, alignment: .leading)
-                    figure(isToday ? "Today" : Self.shortDate(selectedDay.date),
-                           "\(selectedDay.allDay)",
-                           color: BatteryPalette.today, labelColor: BatteryPalette.today)
+                    figure(isToday ? "Today" : Self.shortDate(day.date), day.allDay,
+                           color: highlight, labelColor: highlight)
                     Spacer()
                 }
                 .padding(.bottom, 10)
@@ -111,19 +131,21 @@ struct BatteryDailyUsageCard: View {
             BatteryDailyUsageChart(days: data.days,
                                    average: data.averagePercent,
                                    detailed: detailed,
-                                   selection: $selection)
-                .padding(.top, detailed ? 46 : 0)
+                                   selection: $selection,
+                                   highlight: highlight)
+                .padding(.top, detailed ? 78 : 0)
 
-            BatteryUsageLegend()
+            BatteryUsageLegend(detailed: detailed)
                 .padding(.top, 12)
         }
     }
 
-    private func figure(_ title: String, _ value: String, color: Color, labelColor: Color) -> some View {
+    private func figure(_ title: String, _ value: Int, color: Color, labelColor: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title).foregroundStyle(labelColor)
             HStack(alignment: .firstTextBaseline, spacing: 1) {
-                Text(value).font(.system(size: 30, weight: .regular))
+                Text("\(value)")
+                    .font(.system(size: 30, weight: .regular))
                     .contentTransition(.numericText())
                 Text("%").font(.system(size: 18, weight: .regular))
             }

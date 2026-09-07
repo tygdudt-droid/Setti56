@@ -1,18 +1,39 @@
 import SwiftUI
 
-/// Settings > Battery (iPadOS 26): level card, Daily Usage card with the
-/// week chart and the top App and System Activity rows, then Battery Health,
-/// Battery Percentage and Low Power Mode.
+/// Settings > Battery (iPadOS 26): level card, an Auto-Lock insight when it
+/// is turned off, the Daily Usage card with the eight-day chart and today's
+/// top apps, then Battery Health, Battery Percentage and Low Power Mode.
 struct BatteryView: View {
     @Environment(SettingsStore.self) private var store
+    @AppStorage("AutoLockDuration") private var autoLock = UIDevice.iPhone ? "30 seconds" : "2 minutes"
     @State private var data = BatteryDataProvider.shared
-    @State private var selectedDay = BatteryDataProvider.shared.days.count - 1
+    @State private var selectedDay = BatteryDataProvider.shared.todayIndex
+
+    private var deviceName: String { MockDevice.current.deviceTypeName }
+    private var autoLockOff: Bool { autoLock.localizedCaseInsensitiveContains("never") }
 
     var body: some View {
         @Bindable var store = store
         CustomList(title: "Battery", topPadding: true) {
             Section {
                 BatteryHeaderCard(data: data)
+            }
+
+            if autoLockOff {
+                Section {
+                    RouteLink("Battery/AutoLock") {
+                        DisplayBrightnessView()
+                    } label: {
+                        HStack(spacing: 14) {
+                            StorageIconView(icon: .app(bundleID: nil, symbol: "lock.badge.clock.fill", tint: "0A84FF"))
+                            Text("Auto-Lock")
+                            Spacer()
+                            Text("Never").foregroundStyle(.secondary)
+                        }
+                    }
+                } footer: {
+                    Text("Auto-Lock is currently turned off. You can save battery by turning it on.")
+                }
             }
 
             Section {
@@ -24,7 +45,7 @@ struct BatteryView: View {
                     .foregroundStyle(.secondary)
                     .listRowSeparator(.hidden, edges: .top)
 
-                ForEach(data.summaryUsage) { usage in
+                ForEach(data.today.apps.prefix(3)) { usage in
                     RouteLink("Battery/App/\(usage.id)") {
                         BatteryAppDetailView(usage: usage)
                     } label: {
@@ -55,17 +76,20 @@ struct BatteryView: View {
                 Toggle("Battery Percentage", isOn: $store.batteryPercentage)
                 Toggle("Low Power Mode", isOn: $store.lowPowerMode)
             } footer: {
-                Text("\(MockDevice.current.deviceTypeName) will temporarily reduce some background activities, processing speed, and display brightness, and limit certain features such as iCloud syncing, mail fetch, and more.")
+                Text("\(deviceName) will temporarily reduce some background activities, processing speed, and display brightness, and limit certain features such as iCloud syncing, mail fetch, and more.")
             }
         }
     }
 }
 
-/// Settings > Battery > View All Battery Usage
+/// Settings > Battery > View All Battery Usage — full-width report for the
+/// selected day.
 struct BatteryUsageView: View {
     let data: BatteryDataProvider
     @State private var showAll = false
-    @State private var selectedDay = BatteryDataProvider.shared.days.count - 1
+    @State private var selectedDay = BatteryDataProvider.shared.todayIndex
+
+    private var day: BatteryDay { data.days[min(max(selectedDay, 0), data.days.count - 1)] }
 
     var body: some View {
         // Full-width page: unlike the rest of Settings, iPadOS lets the
@@ -75,15 +99,15 @@ struct BatteryUsageView: View {
                 BatteryDailyUsageCard(data: data, detailed: true, selection: $selectedDay)
                     .padding(.top, 6)
 
-                BatteryHourlyChart(hours: data.hours, sessions: data.chargingSessions)
+                BatteryHourlyChart(hours: day.hours, sessions: day.sessions)
                     .padding(.top, 26)
                     .padding(.bottom, 6)
 
                 HStack(alignment: .top, spacing: 0) {
-                    screenFigure("Screen On", data.screenOnMinutes)
-                        .frame(width: 300, alignment: .leading)
-                    screenFigure("Screen Off", data.screenOffMinutes)
-                    Spacer()
+                    screenFigure("Screen On", day.screenOn)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    screenFigure("Screen Off", day.screenOff)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(.bottom, 6)
             } header: {
@@ -99,7 +123,7 @@ struct BatteryUsageView: View {
                     .foregroundStyle(.secondary)
                     .listRowSeparator(.hidden)
 
-                ForEach(showAll ? data.appUsage : Array(data.appUsage.prefix(5))) { usage in
+                ForEach(showAll ? day.apps : Array(day.apps.prefix(5))) { usage in
                     RouteLink("BatteryUsage/App/\(usage.id)") {
                         BatteryAppDetailView(usage: usage)
                     } label: {
@@ -107,8 +131,10 @@ struct BatteryUsageView: View {
                     }
                 }
 
-                Button(showAll ? "Show Less" : "Show More") {
-                    withAnimation { showAll.toggle() }
+                if day.apps.count > 5 {
+                    Button(showAll ? "Show Less" : "Show More") {
+                        withAnimation { showAll.toggle() }
+                    }
                 }
             } header: {
                 VStack(alignment: .leading, spacing: 6) {
@@ -129,7 +155,7 @@ struct BatteryUsageView: View {
                     .foregroundStyle(.secondary)
                     .listRowSeparator(.hidden)
 
-                ForEach(data.otherUsage) { usage in
+                ForEach(day.other) { usage in
                     RouteLink("BatteryUsage/Other/\(usage.id)") {
                         BatteryAppDetailView(usage: usage)
                     } label: {
@@ -178,8 +204,7 @@ struct BatteryAppDetailView: View {
     }
 }
 
-/// Settings > Battery > Battery Health > Charge Limit (kept for the mock
-/// charge-limit slider used elsewhere).
+/// Mock charge-limit slider, reachable from Battery Health.
 struct ChargeLimitView: View {
     @Environment(SettingsStore.self) private var store
 
