@@ -120,8 +120,7 @@ struct MockConfigView: View {
             Section {
                 Toggle("Use Real Installed Apps", isOn: $store.useRealApps)
             } header: { Text("Storage Apps").textCase(nil) } footer: {
-                Text(InstalledAppsReader.visibleApps.map { "Found \($0.count) apps on this device. Sizes and last-used dates are generated from the bundle ID, so they stay the same between launches." }
-                     ?? "The installed-app lookup is unavailable here, so the mock app list is used.")
+                Text("\(InstalledAppsReader.diagnostic) Sizes and last-used lines are generated from the bundle ID, so they stay the same between launches.")
             }
 
             Section {
