@@ -1,4 +1,5 @@
 import SwiftUI
+import ObjectiveC
 
 enum AppLibraryCategory: String, CaseIterable, Codable {
     case suggestions = "Suggestions"
@@ -76,6 +77,129 @@ enum MockAppCatalog {
         case .suggestions: return suggestions.filter { !hidden.contains($0.bundleID) }
         case .recentlyAdded: return recentlyAdded.filter { !hidden.contains($0.bundleID) }
         default: return all.filter { $0.category == category && !hidden.contains($0.bundleID) }
+        }
+    }
+}
+
+// MARK: - Real installed apps
+
+/// One app actually installed on this device.
+struct InstalledApp: Identifiable, Hashable {
+    let bundleID: String
+    let name: String
+    let isSystem: Bool
+    var id: String { bundleID }
+}
+
+/// Reads the installed-app list through `LSApplicationWorkspace`, the same
+/// kind of private lookup this project already uses for Settings icons.
+///
+/// Every step is guarded with a runtime check, so a future OS change makes
+/// `apps` return `nil` — callers then fall back to the mock catalog — rather
+/// than raising an unrecognized-selector exception.
+///
+/// - Warning: Private API. Do not reuse this in a shipping app.
+enum InstalledAppsReader {
+    /// Runs once, lazily, on first access.
+    static let apps: [InstalledApp]? = load()
+
+    /// Real apps if available, otherwise nil.
+    static var visibleApps: [InstalledApp]? {
+        guard let apps, !apps.isEmpty else { return nil }
+        return apps
+    }
+
+    private static func load() -> [InstalledApp]? {
+        let defaultSel = NSSelectorFromString("defaultWorkspace")
+        guard let workspaceClass = NSClassFromString("LSApplicationWorkspace"),
+              class_getClassMethod(workspaceClass, defaultSel) != nil,
+              let workspace = (workspaceClass as AnyObject).perform(defaultSel)?
+                  .takeUnretainedValue() as? NSObject
+        else { return nil }
+
+        let allSel = NSSelectorFromString("allApplications")
+        guard workspace.responds(to: allSel),
+              let proxies = workspace.perform(allSel)?.takeUnretainedValue() as? [NSObject]
+        else { return nil }
+
+        var seen = Set<String>()
+        var result: [InstalledApp] = []
+        for proxy in proxies {
+            guard let bundleID = string(proxy, "applicationIdentifier"),
+                  !bundleID.isEmpty,
+                  !seen.contains(bundleID),
+                  !isHidden(proxy),
+                  !isNoise(bundleID)
+            else { continue }
+            seen.insert(bundleID)
+            let name = string(proxy, "localizedName") ?? bundleID
+            let type = string(proxy, "applicationType") ?? "User"
+            result.append(InstalledApp(bundleID: bundleID, name: name, isSystem: type == "System"))
+        }
+        return result.isEmpty ? nil : result
+    }
+
+    // MARK: Runtime helpers
+
+    private static func string(_ object: NSObject, _ name: String) -> String? {
+        let selector = NSSelectorFromString(name)
+        guard object.responds(to: selector) else { return nil }
+        return object.perform(selector)?.takeUnretainedValue() as? String
+    }
+
+    /// SpringBoard marks setup assistants and demo apps with a "hidden" tag.
+    private static func isHidden(_ proxy: NSObject) -> Bool {
+        let selector = NSSelectorFromString("appTags")
+        guard proxy.responds(to: selector),
+              let tags = proxy.perform(selector)?.takeUnretainedValue() as? [String]
+        else { return false }
+        return tags.contains("hidden")
+    }
+
+    /// Internal bundles that never appear in Settings > Storage.
+    private static func isNoise(_ bundleID: String) -> Bool {
+        let lower = bundleID.lowercased()
+        return lower.hasPrefix("com.apple.webapp")
+            || lower.contains(".internal")
+            || lower.contains("diagnostic")
+            || lower.hasSuffix(".appex")
+    }
+
+    // MARK: Deterministic mock numbers
+
+    /// Stable per-bundle hash so sizes never change between launches.
+    private static func hash(_ text: String) -> UInt64 {
+        var value: UInt64 = 0xcbf29ce484222325
+        for byte in text.utf8 {
+            value = (value ^ UInt64(byte)) &* 0x100000001b3
+        }
+        return value
+    }
+
+    /// Plausible size for an app: a few very large, most small.
+    static func mockBytes(for bundleID: String) -> Int64 {
+        let h = hash(bundleID)
+        let bucket = h % 100
+        let spread = Double(h >> 8 & 0xFFFF) / Double(0xFFFF)
+        let gb: Double
+        switch bucket {
+        case 0..<4:   gb = 8 + spread * 34        // 8–42 GB
+        case 4..<12:  gb = 1.5 + spread * 6       // 1.5–7.5 GB
+        case 12..<40: gb = 0.15 + spread * 1.2    // 150 MB–1.3 GB
+        case 40..<80: gb = 0.02 + spread * 0.12   // 20–140 MB
+        default:      gb = 0.00002 + spread * 0.0008
+        }
+        return Int64(gb * 1_000_000_000)
+    }
+
+    /// Stable "Last used" line; some apps show none, like iOS.
+    static func mockLastUsed(for bundleID: String) -> String? {
+        let h = hash(bundleID) >> 24
+        switch h % 6 {
+        case 0, 1: return "Today"
+        case 2: return "Yesterday"
+        case 3: return "\(Int(h % 6) + 2) days ago"
+        default: return nil
         }
     }
 }

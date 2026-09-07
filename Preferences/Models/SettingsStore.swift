@@ -32,6 +32,8 @@ final class SettingsStore {
 
     // MARK: Storage (General > [Device] Storage)
     var storage: MockStorageSettings { didSet { persist(storage, key: "mock.storage") } }
+    /// List the apps really installed on the device instead of the mock set.
+    var useRealApps: Bool { didSet { UserDefaults.standard.set(useRealApps, forKey: "storage.realApps") } }
 
     private init() {
         let d = UserDefaults.standard
@@ -49,6 +51,7 @@ final class SettingsStore {
         requireAuthForHiddenApps = d.object(forKey: "apps.hidden.auth") as? Bool ?? true
         mockPasscode = d.string(forKey: "mock.passcode") ?? "000000"
         storage = SettingsStore.load(MockStorageSettings.self, key: "mock.storage") ?? MockStorageSettings()
+        useRealApps = d.object(forKey: "storage.realApps") as? Bool ?? true
     }
 
     private func persist<T: Encodable>(_ value: T?, key: String) {

@@ -150,10 +150,32 @@ struct DeviceStorageView: View {
     private var osName: String { isPad ? "iPadOS" : "iOS" }
     private var settings: MockStorageSettings { store.storage }
 
+    /// Every row of the list, Photos included.
+    ///
+    /// With "Use Real Installed Apps" on, the names and icons come from the
+    /// device itself; sizes and last-used lines are generated from the bundle
+    /// ID so they stay stable. Falls back to the mock catalog whenever the
+    /// lookup is unavailable.
     private var allApps: [StorageEntry] {
-        [MockStorageCatalog.photosRow(gb: settings.photosGB)] + MockStorageCatalog.apps
+        if store.useRealApps, let installed = InstalledAppsReader.visibleApps {
+            return installed.map { app in
+                StorageEntry(
+                    id: app.bundleID,
+                    name: app.name,
+                    icon: .app(bundleID: app.bundleID, symbol: "app.fill", tint: "8E8E93"),
+                    bytes: app.bundleID == MockStorageCatalog.photosID
+                        ? photosBytes
+                        : InstalledAppsReader.mockBytes(for: app.bundleID),
+                    lastUsed: InstalledAppsReader.mockLastUsed(for: app.bundleID)
+                )
+            }
+        }
+        return [MockStorageCatalog.photosRow(gb: settings.photosGB)] + MockStorageCatalog.apps
     }
-    private var applicationsBytes: Int64 { MockStorageCatalog.apps.reduce(0) { $0 + $1.bytes } }
+    /// Applications category: everything except the Photos row.
+    private var applicationsBytes: Int64 {
+        allApps.filter { $0.id != MockStorageCatalog.photosID }.reduce(0) { $0 + $1.bytes }
+    }
     private var photosBytes: Int64 { MockStorageCatalog.gb(settings.photosGB) }
     private var osBytes: Int64 { MockStorageCatalog.gb(settings.osGB) }
     private var systemBytes: Int64 { MockStorageCatalog.gb(settings.systemDataGB) }

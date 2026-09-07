@@ -118,6 +118,13 @@ struct MockConfigView: View {
             } header: { Text("Storage Recommendations").textCase(nil) } footer: { Text("Shown at the top of General → iPad Storage. Tapping Empty on the device turns the Recently Deleted card off; turn it back on here.") }
 
             Section {
+                Toggle("Use Real Installed Apps", isOn: $store.useRealApps)
+            } header: { Text("Storage Apps").textCase(nil) } footer: {
+                Text(InstalledAppsReader.visibleApps.map { "Found \($0.count) apps on this device. Sizes and last-used dates are generated from the bundle ID, so they stay the same between launches." }
+                     ?? "The installed-app lookup is unavailable here, so the mock app list is used.")
+            }
+
+            Section {
                 numberField("Total capacity (GB)", value: $store.storage.totalGB)
                 numberField("Photos (GB)", value: $store.storage.photosGB)
                 numberField("iPadOS (GB)", value: $store.storage.osGB)
