@@ -39,7 +39,8 @@ struct AnalyticsDataView: View {
                 }
             }
         }
-        .refreshable { store.reload() }
+        .task { store.refresh() }
+        .refreshable { store.refresh() }
         .searchable(
             text: $searchText,
             placement: UIDevice.iPhone ? .automatic : .toolbar,

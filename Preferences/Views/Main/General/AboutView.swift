@@ -33,9 +33,9 @@ struct AboutView: View {
                         title: "\(device.systemName) Version"
                     )
                 } label: {
-                    LabeledContent("\(device.systemName) Version", value: identity.osVersion ?? device.systemVersion)
+                    LabeledContent("\(device.systemName) Version", value: DeviceProfile.osVersion)
                 }
-                LabeledContent("Model Name", value: identity.modelName ?? device.modelName)
+                LabeledContent("Model Name", value: DeviceProfile.modelName)
                     .textSelection(.enabled)
                 LabeledContent("Model Number", value: showingRegulatoryModel ? identity.regulatoryModel : identity.modelNumber)
                     .textSelection(.enabled)

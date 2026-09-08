@@ -22,7 +22,9 @@ struct MockDevice {
     var modelName: String { MockDevice.knownModels[identifier] ?? UIDevice.current.model }
     var systemName: String { UIDevice.current.systemName }
     var systemVersion: String { UIDevice.current.systemVersion }
-    var buildNumber: String { "23A340" }
+    /// Fallback only — `DeviceProfile.build` prefers MobileGestalt and the
+    /// Mock Configuration override.
+    var buildNumber: String { "23G83" }
     var deviceName: String { UIDevice.current.name }
 
     /// Adaptive Power exists on iPhone 15 Pro and newer (not 16e).
@@ -52,6 +54,11 @@ struct MockDevice {
         "iPad15,5": "iPad Air 13-inch (M3)", "iPad15,6": "iPad Air 13-inch (M3)",
         "iPad15,7": "iPad (A16)", "iPad15,8": "iPad (A16)",
         "iPad16,1": "iPad mini (A17 Pro)", "iPad16,2": "iPad mini (A17 Pro)",
+        "iPad13,1": "iPad Air (4th generation)", "iPad13,2": "iPad Air (4th generation)",
+        "iPad13,4": "iPad Pro 11-inch (3rd generation)", "iPad13,5": "iPad Pro 11-inch (3rd generation)",
+        "iPad13,6": "iPad Pro 11-inch (3rd generation)", "iPad13,7": "iPad Pro 11-inch (3rd generation)",
+        "iPad13,8": "iPad Pro 12.9-inch (5th generation)", "iPad13,9": "iPad Pro 12.9-inch (5th generation)",
+        "iPad13,10": "iPad Pro 12.9-inch (5th generation)", "iPad13,11": "iPad Pro 12.9-inch (5th generation)",
         "iPad13,16": "iPad Air (5th generation)", "iPad13,17": "iPad Air (5th generation)",
         "iPad13,18": "iPad (10th generation)", "iPad13,19": "iPad (10th generation)"
     ]

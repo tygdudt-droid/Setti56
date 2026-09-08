@@ -15,6 +15,8 @@ struct MockDeviceIdentity: Codable {
     var regulatoryModel: String
     var iccid: String
     var modelName: String? = nil
+    /// Hardware identifier (`iPad13,4`) — what crash reports call `modelCode`.
+    var modelIdentifier: String? = nil
     var osVersion: String? = nil
     var buildNumber: String? = nil
     var capacity: String? = nil
@@ -64,7 +66,7 @@ struct MockDeviceIdentity: Codable {
     private enum CodingKeys: String, CodingKey {
         case serialNumber, imei, imei2, eid, seid, wifiAddress, bluetoothAddress
         case modemFirmware, modelNumber, regulatoryModel, iccid
-        case modelName, osVersion, buildNumber, capacity, available
+        case modelName, modelIdentifier, osVersion, buildNumber, capacity, available
     }
 
     init(serialNumber: String, imei: String, imei2: String, eid: String, seid: String,
@@ -97,6 +99,7 @@ struct MockDeviceIdentity: Codable {
         regulatoryModel = try c.decode(String.self, forKey: .regulatoryModel)
         iccid = try c.decode(String.self, forKey: .iccid)
         modelName = try c.decodeIfPresent(String.self, forKey: .modelName)
+        modelIdentifier = try c.decodeIfPresent(String.self, forKey: .modelIdentifier)
         osVersion = try c.decodeIfPresent(String.self, forKey: .osVersion)
         buildNumber = try c.decodeIfPresent(String.self, forKey: .buildNumber)
         capacity = try c.decodeIfPresent(String.self, forKey: .capacity)

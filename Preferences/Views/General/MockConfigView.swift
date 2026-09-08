@@ -23,6 +23,7 @@ struct MockConfigView: View {
     @State private var osVersion = ""
     @State private var build = ""
     @State private var modelName = ""
+    @State private var modelIdentifier = ""
     @State private var capacity = ""
     @State private var available = ""
     @State private var confirmReset = false
@@ -72,7 +73,8 @@ struct MockConfigView: View {
             // MARK: Device
             Section("Device") {
                 TextField("Name", text: $deviceName)
-                TextField("Model Name (e.g. iPad Pro 13-inch (M4))", text: $modelName)
+                TextField("Model Name (e.g. iPad Pro 11-inch (3rd generation))", text: $modelName)
+                TextField("Model Identifier (e.g. iPad13,4)", text: $modelIdentifier)
                 TextField("Model Number", text: $identity.modelNumber)
                 TextField("Regulatory Model (A####)", text: $identity.regulatoryModel)
                 TextField("Serial Number", text: $identity.serialNumber).textInputAutocapitalization(.characters)
@@ -148,6 +150,7 @@ struct MockConfigView: View {
     private func load() {
         identity = .stored
         modelName = identity.modelName ?? ""
+        modelIdentifier = identity.modelIdentifier ?? ""
         osVersion = identity.osVersion ?? ""
         build = identity.buildNumber ?? ""
         capacity = identity.capacity ?? ""
@@ -164,6 +167,7 @@ struct MockConfigView: View {
     private func save() {
         func nilIfEmpty(_ s: String) -> String? { s.trimmingCharacters(in: .whitespaces).isEmpty ? nil : s }
         identity.modelName = nilIfEmpty(modelName)
+        identity.modelIdentifier = nilIfEmpty(modelIdentifier)
         identity.osVersion = nilIfEmpty(osVersion)
         identity.buildNumber = nilIfEmpty(build)
         identity.capacity = nilIfEmpty(capacity)

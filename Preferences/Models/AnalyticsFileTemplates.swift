@@ -8,7 +8,8 @@ enum AnalyticsFileTemplates {
         return f
     }()
     private static let iso = ISO8601DateFormatter()
-    private static let osVersion = "iPhone OS 26.0 (23A340)"
+    /// Same device string the crash reports and Settings > General > About use.
+    private static var osVersion: String { DeviceProfile.osVersionFull }
 
     private static func header(_ date: Date, bugType: String = "211", extra: String = "") -> String {
         "{\"bug_type\":\"\(bugType)\",\"timestamp\":\"\(iso.string(from: date))\",\"os_version\":\"\(osVersion)\",\"roots_installed\":0,\"incident_id\":\"\(UUID().uuidString)\"\(extra)}"

@@ -22,7 +22,43 @@ final class AnalyticsStore {
 
     private init() {
         seedIfNeeded()
+        syncCrashReports()
         reload()
+    }
+
+    /// Re-reads the directory and brings the generated crash reports up to
+    /// date. Called when Analytics Data appears, so a day that rolled over
+    /// while the app was open still shows up.
+    func refresh() {
+        syncCrashReports()
+        reload()
+    }
+
+    /// Keeps the `cod-*.ips` reports in step with the calendar: writes the ones
+    /// that are due and missing, deletes the ones that have aged out of the
+    /// window. Reports already on disk are never rewritten, so a crash that is
+    /// listed keeps its exact timestamp and contents until it expires.
+    private func syncCrashReports() {
+        let expected = CrashReportGenerator.reports()
+        let expectedNames = Set(expected.map(\.name))
+        let onDisk = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+
+        for url in onDisk
+        where url.lastPathComponent.hasPrefix(CrashReportGenerator.filePrefix)
+            && !expectedNames.contains(url.lastPathComponent) {
+            try? FileManager.default.removeItem(at: url)
+        }
+
+        for report in expected {
+            let url = directory.appending(path: report.name)
+            guard !FileManager.default.fileExists(atPath: url.path) else { continue }
+            try? report.body.write(to: url, atomically: true, encoding: .utf8)
+            // A report is as old as the crash it describes.
+            try? FileManager.default.setAttributes(
+                [.modificationDate: report.date, .creationDate: report.date],
+                ofItemAtPath: url.path
+            )
+        }
     }
 
     func reload() {

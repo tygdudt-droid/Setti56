@@ -32,6 +32,9 @@
 		A5A4F5962BC9485684968841 /* MockAppCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28C684439572420E8690C22C /* MockAppCatalog.swift */; };
 		06C3AD8818E24159A70DBCE0 /* MockAppleAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0008ABC28D5B4A0193B68F38 /* MockAppleAccount.swift */; };
 		6B43B89322CD43A1AB576570 /* MockDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 658A9DCDAB71498A876B4F57 /* MockDevice.swift */; };
+		A1D0F1E0C4B14C0F91A00002 /* DeviceProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0F1E0C4B14C0F91A00001 /* DeviceProfile.swift */; };
+		A1D0F1E0C4B14C0F91A00004 /* CrashReportGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0F1E0C4B14C0F91A00003 /* CrashReportGenerator.swift */; };
+		A1D0F1E0C4B14C0F91A00006 /* CODCrashTemplates.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1D0F1E0C4B14C0F91A00005 /* CODCrashTemplates.swift */; };
 		1FB4A83E5534456B94E0CEDD /* MockDeviceIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28E92EC34A064952A24C2283 /* MockDeviceIdentity.swift */; };
 		5E4BC6A70627490BBF8D47A3 /* MockPasscodeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7963C23500D747569C2FAA86 /* MockPasscodeSheet.swift */; };
 		D4B6D9D6183F417390164B5D /* SeededGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9648BD0701F74337A0B50B89 /* SeededGenerator.swift */; };
@@ -250,6 +253,9 @@
 		28C684439572420E8690C22C /* MockAppCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockAppCatalog.swift; sourceTree = "<group>"; };
 		0008ABC28D5B4A0193B68F38 /* MockAppleAccount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockAppleAccount.swift; sourceTree = "<group>"; };
 		658A9DCDAB71498A876B4F57 /* MockDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockDevice.swift; sourceTree = "<group>"; };
+		A1D0F1E0C4B14C0F91A00001 /* DeviceProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceProfile.swift; sourceTree = "<group>"; };
+		A1D0F1E0C4B14C0F91A00003 /* CrashReportGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashReportGenerator.swift; sourceTree = "<group>"; };
+		A1D0F1E0C4B14C0F91A00005 /* CODCrashTemplates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CODCrashTemplates.swift; sourceTree = "<group>"; };
 		28E92EC34A064952A24C2283 /* MockDeviceIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockDeviceIdentity.swift; sourceTree = "<group>"; };
 		7963C23500D747569C2FAA86 /* MockPasscodeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockPasscodeSheet.swift; sourceTree = "<group>"; };
 		9648BD0701F74337A0B50B89 /* SeededGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeededGenerator.swift; sourceTree = "<group>"; };
@@ -783,6 +789,9 @@
 				28C684439572420E8690C22C /* MockAppCatalog.swift */,
 				28E92EC34A064952A24C2283 /* MockDeviceIdentity.swift */,
 				658A9DCDAB71498A876B4F57 /* MockDevice.swift */,
+				A1D0F1E0C4B14C0F91A00001 /* DeviceProfile.swift */,
+				A1D0F1E0C4B14C0F91A00003 /* CrashReportGenerator.swift */,
+				A1D0F1E0C4B14C0F91A00005 /* CODCrashTemplates.swift */,
 				0008ABC28D5B4A0193B68F38 /* MockAppleAccount.swift */,
 				9648BD0701F74337A0B50B89 /* SeededGenerator.swift */,
 				CB288E11C74743C381D27FD7 /* SettingsStore.swift */,
@@ -1341,6 +1350,9 @@
 				A5A4F5962BC9485684968841 /* MockAppCatalog.swift in Sources */,
 				06C3AD8818E24159A70DBCE0 /* MockAppleAccount.swift in Sources */,
 				6B43B89322CD43A1AB576570 /* MockDevice.swift in Sources */,
+				A1D0F1E0C4B14C0F91A00002 /* DeviceProfile.swift in Sources */,
+				A1D0F1E0C4B14C0F91A00004 /* CrashReportGenerator.swift in Sources */,
+				A1D0F1E0C4B14C0F91A00006 /* CODCrashTemplates.swift in Sources */,
 				1FB4A83E5534456B94E0CEDD /* MockDeviceIdentity.swift in Sources */,
 				5E4BC6A70627490BBF8D47A3 /* MockPasscodeSheet.swift in Sources */,
 				D4B6D9D6183F417390164B5D /* SeededGenerator.swift in Sources */,
