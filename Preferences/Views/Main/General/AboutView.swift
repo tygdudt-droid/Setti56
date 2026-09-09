@@ -12,7 +12,6 @@ struct AboutView: View {
     @AppStorage("DeviceName") private var storedDeviceName = UIDevice.current.name
     @State private var showingRegulatoryModel = false
     @State private var availableStorage = "…"
-    @State private var showMockConfig = false
     private let device = MockDevice.current
     private let identity = MockDeviceIdentity.stored
     private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
@@ -46,9 +45,6 @@ struct AboutView: View {
                     .contextMenu {
                         Button("Copy", systemImage: "doc.on.doc") {
                             UIPasteboard.general.string = identity.serialNumber
-                        }
-                        Button("Mock Configuration…", systemImage: "wrench.and.screwdriver") {
-                            showMockConfig = true
                         }
                     }
             }
@@ -114,9 +110,6 @@ struct AboutView: View {
         }
         .task {
             availableStorage = getAvailableStorage() ?? "—"
-        }
-        .navigationDestination(isPresented: $showMockConfig) {
-            MockConfigView()
         }
     }
 

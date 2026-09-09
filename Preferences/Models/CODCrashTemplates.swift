@@ -69,7 +69,7 @@ enum CODCrashTemplates {
     "source" : "P",
     "arch" : "arm64",
     "base" : {{IMG_BASE:4369891328}},
-    "size" : 203816960,
+    "size" : 204603392,
     "uuid" : "{{SLICE_UUID}}",
     "path" : "\/private\/var\/containers\/Bundle\/Application\/{{APP_CONTAINER}}\/cod.app\/cod",
     "name" : "cod"
@@ -754,7 +754,7 @@ enum CODCrashTemplates {
     "source" : "P",
     "arch" : "arm64",
     "base" : {{IMG_BASE:4310089728}},
-    "size" : 203816960,
+    "size" : 204603392,
     "uuid" : "{{SLICE_UUID}}",
     "path" : "\/private\/var\/containers\/Bundle\/Application\/{{APP_CONTAINER}}\/cod.app\/cod",
     "name" : "cod"

@@ -31,10 +31,6 @@ struct AnalyticsDataView: View {
                     }
                     .contextMenu {
                         ShareLink(item: file.url, preview: SharePreview(file.name, image: Image(systemName: "doc.text")))
-                        Button("Delete", systemImage: "trash", role: .destructive) {
-                            try? FileManager.default.removeItem(at: file.url)
-                            store.reload()
-                        }
                     }
                 }
             }
@@ -66,24 +62,17 @@ struct AnalyticsFileDetailView: View {
     @State private var text = ""
 
     var body: some View {
-        ScrollView {
-            Text(text)
-                .font(.system(size: 11, design: .monospaced))
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, UIDevice.iPad ? 8 : 12)
-                .padding(.top, 6)
-                .padding(.bottom, 24)
-        }
-        .background(Color(.systemBackground))
-        .navigationTitle(file.name)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                ShareLink(item: file.url, preview: SharePreview(file.name, image: Image(systemName: "doc.text")))
+        DiagnosticTextView(text: text)
+            .ignoresSafeArea(.container, edges: .bottom)
+            .background(Color(.systemBackground))
+            .navigationTitle(file.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    ShareLink(item: file.url, preview: SharePreview(file.name, image: Image(systemName: "doc.text")))
+                }
             }
-        }
-        .task { text = AnalyticsStore.shared.contents(of: file) }
+            .task { text = AnalyticsStore.shared.contents(of: file) }
     }
 }
 

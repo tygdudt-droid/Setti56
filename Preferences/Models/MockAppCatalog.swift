@@ -459,9 +459,13 @@ enum InstalledAppsReader {
 /// the App Store rather than hunted down by hand.
 struct CustomStorageApp: Codable, Identifiable, Hashable {
     var bundleID: String
+    /// What the Home Screen calls the app — editable, because the App Store
+    /// listing title ("Call of Duty®: Mobile") is rarely the installed name.
     var name: String
     var bytes: Int64
     var lastUsed: String?
+    /// Shown under the app name in Storage, e.g. `1.0.57`.
+    var version: String?
     var id: String { bundleID }
 }
 
@@ -471,6 +475,7 @@ struct AppStoreResult: Identifiable, Hashable {
     let name: String
     let artworkURL: URL
     let bytes: Int64
+    let version: String?
     var id: String { bundleID }
 }
 
@@ -528,7 +533,8 @@ enum AppStoreLookup {
             var bytes: Int64 = 0
             if let text = item["fileSizeBytes"] as? String, let value = Int64(text) { bytes = value }
             else if let value = item["fileSizeBytes"] as? Int64 { bytes = value }
-            return AppStoreResult(bundleID: bundleID, name: name, artworkURL: artworkURL, bytes: bytes)
+            return AppStoreResult(bundleID: bundleID, name: name, artworkURL: artworkURL,
+                                  bytes: bytes, version: item["version"] as? String)
         }
     }
 }
@@ -586,9 +592,12 @@ final class StorageAppsStore {
         let app = CustomStorageApp(bundleID: result.bundleID,
                                    name: result.name,
                                    bytes: result.bytes > 0 ? result.bytes : InstalledAppsReader.mockBytes(for: result.bundleID),
-                                   lastUsed: InstalledAppsReader.mockLastUsed(for: result.bundleID))
+                                   lastUsed: InstalledAppsReader.mockLastUsed(for: result.bundleID),
+                                   version: result.version)
         if let index = customApps.firstIndex(where: { $0.bundleID == app.bundleID }) {
-            customApps[index] = app
+            // Adding an app that is already listed refreshes its icon but
+            // leaves whatever was typed in the editor alone.
+            customApps[index].lastUsed = app.lastUsed
         } else {
             customApps.append(app)
         }
@@ -606,6 +615,22 @@ final class StorageAppsStore {
     func setBytes(_ bytes: Int64, for bundleID: String) {
         guard let index = customApps.firstIndex(where: { $0.bundleID == bundleID }) else { return }
         customApps[index].bytes = max(0, bytes)
+        persistApps()
+    }
+
+    /// An empty name is ignored — a row with no name cannot be found again.
+    func setName(_ name: String, for bundleID: String) {
+        guard let index = customApps.firstIndex(where: { $0.bundleID == bundleID }) else { return }
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        customApps[index].name = trimmed
+        persistApps()
+    }
+
+    func setVersion(_ version: String, for bundleID: String) {
+        guard let index = customApps.firstIndex(where: { $0.bundleID == bundleID }) else { return }
+        let trimmed = version.trimmingCharacters(in: .whitespaces)
+        customApps[index].version = trimmed.isEmpty ? nil : trimmed
         persistApps()
     }
 

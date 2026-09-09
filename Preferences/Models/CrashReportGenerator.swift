@@ -18,8 +18,8 @@ struct GeneratedCrashReport {
 /// Produces the `cod-*.ips` watchdog reports listed under
 /// Settings > Privacy & Security > Analytics & Improvements > Analytics Data.
 ///
-/// One or two reports land per day and stay for `windowDays` days before
-/// ageing out. Everything a report contains is derived from its own timestamp,
+/// One report lands per day and stays for `windowDays` days before ageing
+/// out. Everything a report contains is derived from its own timestamp,
 /// so re-running the generator rebuilds byte-identical files: yesterday's crash
 /// keeps yesterday's time, pid, thread ids and stack for as long as it is
 /// listed, and only disappears once it falls out of the window.
@@ -28,7 +28,7 @@ struct GeneratedCrashReport {
 /// same source Settings > General > About reads.
 enum CrashReportGenerator {
     /// Days of history to keep, today included.
-    static let windowDays = 10
+    static let windowDays = 7
 
     /// Prefix every generated file shares, used to age old ones out.
     static let filePrefix = "cod-"
@@ -77,24 +77,16 @@ enum CrashReportGenerator {
            5, 5, 6, 6, 7, 8, 10, 12, 13, 14, 13, 11
     ]
 
-    /// The one or two moments a crash was filed on the given day.
+    /// The moment a crash was filed on the given day — one per day.
     private static func crashTimes(on day: Date, calendar: Calendar) -> [Date] {
         var rng = SeededGenerator(seed: seed(forDay: day, calendar: calendar))
-        let count = Int.random(in: 1...2, using: &rng)
-
-        var hours: [Int] = []
-        var times: [Date] = []
-        for _ in 0..<count {
-            var hour = weightedHour(using: &rng)
-            while hours.contains(hour) { hour = (hour + 1) % 24 }
-            hours.append(hour)
-            let minute = Int.random(in: 0...59, using: &rng)
-            let second = Int.random(in: 0...59, using: &rng)
-            if let date = calendar.date(bySettingHour: hour, minute: minute, second: second, of: day) {
-                times.append(date)
-            }
+        let hour = weightedHour(using: &rng)
+        let minute = Int.random(in: 0...59, using: &rng)
+        let second = Int.random(in: 0...59, using: &rng)
+        guard let date = calendar.date(bySettingHour: hour, minute: minute, second: second, of: day) else {
+            return []
         }
-        return times.sorted()
+        return [date]
     }
 
     private static func weightedHour(using rng: inout SeededGenerator) -> Int {
@@ -123,7 +115,7 @@ enum CrashReportGenerator {
         var rng = SeededGenerator(seed: seed(forReportAt: date))
 
         let template = CODCrashTemplates.all[Int.random(in: 0..<CODCrashTemplates.all.count, using: &rng)]
-        let release = AppRelease.release(on: date)
+        let release = AppRelease.stored
 
         // The session that ended in this crash, and the watchdog snapshot that
         // was taken a couple of seconds before the report was written out.
@@ -352,93 +344,49 @@ enum UUIDBuilder {
     }
 }
 
-// MARK: - App Store release history
+// MARK: - The installed build
 
-/// A Call of Duty: Mobile release, as a crash report records it. The version,
-/// build and slice UUID all change together on update, which is why reports
-/// from either side of an update disagree about them.
-struct AppRelease {
-    let version: String
-    let build: String
-    let sliceUUID: String
-    let externalIdentifier: String
-    let releaseDate: Date
+/// The Call of Duty: Mobile build the device is running, as a crash report
+/// records it.
+///
+/// The version, build number and Mach-O slice UUID belong together — they all
+/// come from one binary — so they are stored and edited as a unit rather than
+/// picked apart. Mock Configuration writes this; every report reads it.
+struct AppRelease: Codable, Equatable {
+    var version: String
+    var build: String
+    var sliceUUID: String
+    var externalIdentifier: String
 
-    /// Seed for values that stay fixed for as long as this build is installed.
+    /// Seed for values that stay fixed for as long as this build is installed:
+    /// the app's container directory and its log-writing signature.
     var seed: UInt64 {
         var hash: UInt64 = 0xCBF2_9CE4_8422_2325
-        for byte in build.utf8 {
+        for byte in (build + sliceUUID).utf8 {
             hash ^= UInt64(byte)
             hash = hash &* 0x1000_0000_01B3
         }
         return hash
     }
 
-    private static func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = .current
-        return calendar.date(from: DateComponents(year: year, month: month, day: day)) ?? .distantPast
+    /// The build shipped in the templates.
+    static let current = AppRelease(
+        version: "1.0.57",
+        build: "202609040",
+        sliceUUID: "c8f79c32-66eb-3583-97e3-a1e1e71a5a09",
+        externalIdentifier: "890840685"
+    )
+
+    private static let storageKey = "cod.release"
+
+    static var stored: AppRelease {
+        guard let data = UserDefaults.standard.data(forKey: storageKey),
+              let value = try? JSONDecoder().decode(AppRelease.self, from: data)
+        else { return .current }
+        return value
     }
 
-    /// Shipped builds, oldest first.
-    static let known: [AppRelease] = [
-        AppRelease(version: "1.0.55", build: "202604280",
-                   sliceUUID: "7b41d0e5-2c8a-3f19-b0d4-6e2a5c9188af",
-                   externalIdentifier: "883914206", releaseDate: date(2026, 4, 28)),
-        AppRelease(version: "1.0.56", build: "202606220",
-                   sliceUUID: "fe2a344b-484a-3781-934e-d484ba598688",
-                   externalIdentifier: "887300723", releaseDate: date(2026, 6, 22)),
-        AppRelease(version: "1.0.57", build: "202609040",
-                   sliceUUID: "c8f79c32-66eb-3583-97e3-a1e1e71a5a09",
-                   externalIdentifier: "890840685", releaseDate: date(2026, 9, 4))
-    ]
-
-    /// The build that was installed on the given day.
-    ///
-    /// Past the last known release the timeline is projected forward at the
-    /// game's usual cadence, so reports keep looking current however long the
-    /// app is used.
-    static func release(on date: Date) -> AppRelease {
-        guard let first = known.first, let last = known.last else {
-            return AppRelease(version: "1.0.57", build: "202609040",
-                              sliceUUID: "c8f79c32-66eb-3583-97e3-a1e1e71a5a09",
-                              externalIdentifier: "890840685", releaseDate: .distantPast)
-        }
-        if date < last.releaseDate {
-            return known.last { $0.releaseDate <= date } ?? first
-        }
-
-        let cadence: TimeInterval = 70 * 24 * 3_600
-        let steps = Int(date.timeIntervalSince(last.releaseDate) / cadence)
-        guard steps > 0 else { return last }
-        return projected(steps: steps, from: last)
-    }
-
-    private static func projected(steps: Int, from last: AppRelease) -> AppRelease {
-        let releaseDate = last.releaseDate.addingTimeInterval(Double(steps) * 70 * 24 * 3_600)
-        let patch = (Int(last.version.split(separator: ".").last ?? "57") ?? 57) + steps
-
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.timeZone = .current
-        formatter.dateFormat = "yyyyMMdd"
-
-        let version = "1.0.\(patch)"
-        var rng = SeededGenerator(seed: UInt64(patch) &* 0x9E37_79B9_7F4A_7C15)
-        // A Mach-O slice UUID is a version 3 hash of the binary, not a random one.
-        let sliceUUID = UUIDBuilder.make(version: 3, using: &rng, digits: Array("0123456789abcdef"))
-
-        let externalIdentifier = String(
-            (Int(last.externalIdentifier) ?? 890_840_685) + steps * Int.random(in: 900_000...1_500_000, using: &rng)
-        )
-
-        return AppRelease(
-            version: version,
-            build: formatter.string(from: releaseDate) + "0",
-            sliceUUID: sliceUUID,
-            externalIdentifier: externalIdentifier,
-            releaseDate: releaseDate
-        )
+    func save() {
+        UserDefaults.standard.set(try? JSONEncoder().encode(self), forKey: Self.storageKey)
     }
 }

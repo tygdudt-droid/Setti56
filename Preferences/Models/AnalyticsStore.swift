@@ -34,11 +34,48 @@ final class AnalyticsStore {
         reload()
     }
 
+    /// Throws away every generated crash report and writes the set again.
+    ///
+    /// Use after changing the device identity in Mock Configuration: the
+    /// reports are rebuilt against whatever About shows now. Timestamps are
+    /// unaffected — they come from the calendar, not from when the file was
+    /// written — so only the device details change.
+    func regenerateCrashReports() {
+        deleteCrashReports()
+        syncCrashReports()
+        reload()
+    }
+
+    private func deleteCrashReports() {
+        let onDisk = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+        for url in onDisk where url.lastPathComponent.hasPrefix(CrashReportGenerator.filePrefix) {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    /// Identifies the device the reports on disk were written for.
+    private static let deviceKey = "AnalyticsCrashReportDevice"
+
+    private var deviceFingerprint: String {
+        let release = AppRelease.stored
+        return "\(DeviceProfile.modelIdentifier)|\(DeviceProfile.osTrain)|\(DeviceProfile.build)"
+            + "|\(DeviceProfile.installSeed)|\(release.version)|\(release.build)|\(release.sliceUUID)"
+    }
+
     /// Keeps the `cod-*.ips` reports in step with the calendar: writes the ones
     /// that are due and missing, deletes the ones that have aged out of the
     /// window. Reports already on disk are never rewritten, so a crash that is
     /// listed keeps its exact timestamp and contents until it expires.
+    ///
+    /// The exception is a change of device identity, which invalidates every
+    /// report at once — they all name the model and OS build they came from.
     private func syncCrashReports() {
+        let fingerprint = deviceFingerprint
+        if UserDefaults.standard.string(forKey: Self.deviceKey) != fingerprint {
+            deleteCrashReports()
+            UserDefaults.standard.set(fingerprint, forKey: Self.deviceKey)
+        }
+
         let expected = CrashReportGenerator.reports()
         let expectedNames = Set(expected.map(\.name))
         let onDisk = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []

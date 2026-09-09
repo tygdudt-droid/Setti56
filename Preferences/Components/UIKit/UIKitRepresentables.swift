@@ -107,3 +107,35 @@ struct CustomView: UIViewRepresentable {
     
     func updateUIView(_ uiView: UIView, context: Context) {}
 }
+
+/// A read-only, non-editable text view for diagnostic file contents.
+///
+/// Settings shows analytics files through a plain `UITextView`, not a label:
+/// TextKit lays out only what is on screen, which is what keeps a 100 KB crash
+/// report scrolling smoothly, and it gives the same wrapping, selection and
+/// insets as the real pane. A SwiftUI `Text` would lay the whole file out at
+/// once and stutter on the larger reports.
+struct DiagnosticTextView: UIViewRepresentable {
+    let text: String
+    var fontSize: CGFloat = 11
+
+    func makeUIView(context: Context) -> UITextView {
+        let view = UITextView()
+        view.isEditable = false
+        view.isSelectable = true
+        view.alwaysBounceVertical = true
+        view.backgroundColor = .systemBackground
+        view.textContainerInset = UIEdgeInsets(top: 8, left: 4, bottom: 24, right: 4)
+        view.textContainer.lineFragmentPadding = 4
+        view.contentInsetAdjustmentBehavior = .always
+        return view
+    }
+
+    func updateUIView(_ view: UITextView, context: Context) {
+        let font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        guard view.text != text || view.font != font else { return }
+        view.font = font
+        view.textColor = .label
+        view.text = text
+    }
+}

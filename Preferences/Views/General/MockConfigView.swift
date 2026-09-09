@@ -2,7 +2,7 @@ import SwiftUI
 import PhotosUI
 
 /// Hidden panel — open by long-pressing the "Contacts Only" row in
-/// Settings > General > AirDrop (or "Serial Number" in About).
+/// Settings > General > AirDrop.
 /// Lets you edit the mock device identity, Apple Account, and Wi-Fi networks.
 struct MockConfigView: View {
     @Environment(SettingsStore.self) private var store
@@ -27,6 +27,10 @@ struct MockConfigView: View {
     @State private var capacity = ""
     @State private var available = ""
     @State private var confirmReset = false
+    @State private var regeneratedCount: Int?
+    @State private var crashAppVersion = ""
+    @State private var crashAppBuild = ""
+    @State private var crashSliceUUID = ""
 
     var body: some View {
         @Bindable var store = store
@@ -115,6 +119,34 @@ struct MockConfigView: View {
                 LabeledContent("Mock passcode", value: store.mockPasscode)
             }
             Section {
+                Button("Regenerate Analytics Crash Reports") {
+                    save()
+                    saveCrashRelease()
+                    AnalyticsStore.shared.regenerateCrashReports()
+                    regeneratedCount = AnalyticsStore.shared.files.filter {
+                        $0.name.hasPrefix(CrashReportGenerator.filePrefix)
+                    }.count
+                }
+                if let regeneratedCount {
+                    LabeledContent("Reports", value: "\(regeneratedCount) rewritten")
+                        .foregroundStyle(.secondary)
+                }
+                TextField("App Version (e.g. 1.0.57)", text: $crashAppVersion)
+                    .autocorrectionDisabled()
+                TextField("App Build (e.g. 202609040)", text: $crashAppBuild)
+                    .keyboardType(.numbersAndPunctuation)
+                    .autocorrectionDisabled()
+                TextField("Slice UUID", text: $crashSliceUUID)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .font(.footnote.monospaced())
+            } header: {
+                Text("Analytics Data").textCase(nil)
+            } footer: {
+                Text("The cod-*.ips reports in Privacy & Security > Analytics & Improvements > Analytics Data describe this build of the game, on the device identity above. Regenerating keeps every report's date and time — only the details change.")
+            }
+
+            Section {
                 Button("Reset All Mock Data", role: .destructive) { confirmReset = true }
             }
         }
@@ -122,7 +154,7 @@ struct MockConfigView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-            ToolbarItem(placement: .confirmationAction) { Button("Done") { save(); dismiss() }.fontWeight(.semibold) }
+            ToolbarItem(placement: .confirmationAction) { Button("Done") { save(); saveCrashRelease(); dismiss() }.fontWeight(.semibold) }
         }
         .onAppear { if !loaded { load(); loaded = true } }
         .onChange(of: photoItem) { _, item in
@@ -143,12 +175,32 @@ struct MockConfigView: View {
                 store.storage = MockStorageSettings()
                 identity = MockDeviceIdentity.regenerate()
                 load()
+                AnalyticsStore.shared.regenerateCrashReports()
             }
         }
     }
 
+    /// Writes the game build the crash reports describe. Blank fields fall
+    /// back to the build the templates were captured from.
+    private func saveCrashRelease() {
+        func value(_ text: String, _ fallback: String) -> String {
+            let trimmed = text.trimmingCharacters(in: .whitespaces)
+            return trimmed.isEmpty ? fallback : trimmed
+        }
+        AppRelease(
+            version: value(crashAppVersion, AppRelease.current.version),
+            build: value(crashAppBuild, AppRelease.current.build),
+            sliceUUID: value(crashSliceUUID, AppRelease.current.sliceUUID),
+            externalIdentifier: AppRelease.stored.externalIdentifier
+        ).save()
+    }
+
     private func load() {
         identity = .stored
+        let release = AppRelease.stored
+        crashAppVersion = release.version
+        crashAppBuild = release.build
+        crashSliceUUID = release.sliceUUID
         modelName = identity.modelName ?? ""
         modelIdentifier = identity.modelIdentifier ?? ""
         osVersion = identity.osVersion ?? ""
@@ -252,6 +304,7 @@ struct StorageConfigView: View {
     @State private var searching = false
     @State private var addingBundleID: String?
     @State private var confirmClear = false
+    @State private var editingApp: CustomStorageApp?
 
     private var detected: [InstalledApp] { InstalledAppsReader.visibleApps ?? [] }
 
@@ -309,18 +362,23 @@ struct StorageConfigView: View {
             if !appsStore.customApps.isEmpty {
                 Section {
                     ForEach(appsStore.customApps) { app in
-                        HStack(spacing: 12) {
-                            addedIcon(app)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(app.name)
-                                Text(app.bundleID).font(.caption2).foregroundStyle(.secondary)
+                        Button {
+                            editingApp = app
+                        } label: {
+                            HStack(spacing: 12) {
+                                addedIcon(app)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(app.name).foregroundStyle(.primary)
+                                    Text(subtitle(for: app)).font(.caption2).foregroundStyle(.secondary)
+                                }
+                                Spacer(minLength: 8)
+                                Text(MockStorageCatalog.format(app.bytes))
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                                Image(systemName: "chevron.forward")
+                                    .font(.footnote.weight(.semibold))
+                                    .foregroundStyle(.tertiary)
                             }
-                            Spacer(minLength: 8)
-                            TextField("0", value: gigabytes(app), format: .number.precision(.fractionLength(0...2)))
-                                .keyboardType(.decimalPad)
-                                .multilineTextAlignment(.trailing)
-                                .frame(width: 70)
-                            Text("GB").foregroundStyle(.secondary)
                         }
                     }
                     .onDelete { offsets in
@@ -329,7 +387,7 @@ struct StorageConfigView: View {
                 } header: {
                     Text("Added Apps").textCase(nil)
                 } footer: {
-                    Text("Swipe to remove. Edit the number to change the size shown in Storage.")
+                    Text("Swipe to remove. Tap an app to change the name, version and size that Storage shows for it.")
                 }
             }
 
@@ -390,6 +448,15 @@ struct StorageConfigView: View {
         .confirmationDialog("Remove all added apps?", isPresented: $confirmClear, titleVisibility: .visible) {
             Button("Remove All", role: .destructive) { appsStore.removeAll() }
         }
+        .navigationDestination(item: $editingApp) { app in
+            StorageAppEditorView(bundleID: app.bundleID)
+        }
+    }
+
+    /// `1.0.57 · com.activision.callofduty.shooter`, or just the bundle ID.
+    private func subtitle(for app: CustomStorageApp) -> String {
+        guard let version = app.version, !version.isEmpty else { return app.bundleID }
+        return "\(version) · \(app.bundleID)"
     }
 
     // MARK: Pieces
@@ -416,13 +483,6 @@ struct StorageConfigView: View {
         }
     }
 
-    private func gigabytes(_ app: CustomStorageApp) -> Binding<Double> {
-        Binding(
-            get: { Double(app.bytes) / 1_000_000_000 },
-            set: { appsStore.setBytes(Int64($0 * 1_000_000_000), for: app.bundleID) }
-        )
-    }
-
     private func hiddenBinding(_ bundleID: String) -> Binding<Bool> {
         Binding(
             get: { !appsStore.hiddenBundleIDs.contains(bundleID) },
@@ -441,5 +501,76 @@ struct StorageConfigView: View {
         let data = await AppStoreLookup.iconData(from: result.artworkURL)
         appsStore.add(result, iconData: data)
         addingBundleID = nil
+    }
+}
+
+/// Hidden panel → Storage Configuration → an added app.
+///
+/// The App Store listing name is rarely what the Home Screen shows ("Call of
+/// Duty®: Mobile" against "Call of Duty"), and the version is what Storage
+/// prints under the app name, so both are editable here alongside the size.
+struct StorageAppEditorView: View {
+    let bundleID: String
+    @State private var appsStore = StorageAppsStore.shared
+    @State private var name = ""
+    @State private var version = ""
+    @State private var gigabytes = 0.0
+    @State private var loaded = false
+
+    private var app: CustomStorageApp? {
+        appsStore.customApps.first { $0.bundleID == bundleID }
+    }
+
+    var body: some View {
+        List {
+            Section {
+                TextField("Name", text: $name)
+                    .autocorrectionDisabled()
+                TextField("Version", text: $version)
+                    .keyboardType(.numbersAndPunctuation)
+                    .autocorrectionDisabled()
+            } header: {
+                Text("App").textCase(nil)
+            } footer: {
+                Text("Both are shown in General → Storage: the name in the list, the version in small type under it when the app is opened.")
+            }
+
+            Section {
+                LabeledContent("Size") {
+                    HStack(spacing: 4) {
+                        TextField("0", value: $gigabytes, format: .number.precision(.fractionLength(0...2)))
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(maxWidth: 100)
+                        Text("GB").foregroundStyle(.secondary)
+                    }
+                }
+            } footer: {
+                Text("Counts towards the Applications total in the storage bar.")
+            }
+
+            Section {
+                LabeledContent("Bundle ID") {
+                    Text(bundleID)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+            }
+        }
+        .navigationTitle(name.isEmpty ? bundleID : name)
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            guard !loaded, let app else { return }
+            name = app.name
+            version = app.version ?? ""
+            gigabytes = Double(app.bytes) / 1_000_000_000
+            loaded = true
+        }
+        .onChange(of: name) { appsStore.setName(name, for: bundleID) }
+        .onChange(of: version) { appsStore.setVersion(version, for: bundleID) }
+        .onChange(of: gigabytes) {
+            appsStore.setBytes(Int64(gigabytes * 1_000_000_000), for: bundleID)
+        }
     }
 }

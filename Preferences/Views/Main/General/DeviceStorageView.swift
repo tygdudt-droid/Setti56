@@ -60,6 +60,10 @@ struct StorageEntry: Identifiable {
     var bytes: Int64
     var lastUsed: String? = nil
     var offloaded = false
+    /// Shown in small type under the app name in the detail pane, the way
+    /// Settings prints an app's version and bundle identifier.
+    var version: String? = nil
+    var bundleID: String? = nil
 
     /// Last-used rank for sorting (Today first, never-used last).
     var lastUsedRank: Int {
@@ -95,9 +99,9 @@ enum MockStorageCatalog {
     /// Everything except the Photos row (its size comes from `MockStorageSettings.photosGB`).
     /// Only pass a bundle ID for apps that are really installed: the private
     /// icon lookup returns a blank template (not nil) for unknown bundles.
-    static let apps: [StorageEntry] = [
-        StorageEntry(id: "telegram", name: "Telegram", icon: .app(bundleID: "ph.telegra.Telegraph", symbol: "paperplane.fill", tint: "2AABEE"), bytes: gb(40.24), lastUsed: "Today"),
-        StorageEntry(id: "cod", name: "Call of Duty", icon: .app(bundleID: "com.activision.callofduty.shooter", symbol: "scope", tint: "1C1C1E"), bytes: gb(29.63), lastUsed: "Today"),
+    static var apps: [StorageEntry] { [
+        StorageEntry(id: "telegram", name: "Telegram", icon: .app(bundleID: "ph.telegra.Telegraph", symbol: "paperplane.fill", tint: "2AABEE"), bytes: gb(40.24), lastUsed: "Today", version: "12.1.1", bundleID: "ph.telegra.Telegraph"),
+        StorageEntry(id: "cod", name: "Call of Duty", icon: .app(bundleID: "com.activision.callofduty.shooter", symbol: "scope", tint: "1C1C1E"), bytes: gb(29.63), lastUsed: "Today", version: AppRelease.stored.version, bundleID: "com.activision.callofduty.shooter"),
         StorageEntry(id: "inshot", name: "InShot", icon: .app(bundleID: nil, symbol: "camera.fill", tint: "FF2D55"), bytes: gb(10.76), lastUsed: "Today"),
         StorageEntry(id: "spotify", name: "Spotify", icon: .app(bundleID: nil, symbol: "music.note", tint: "1DB954"), bytes: gb(4.62), lastUsed: "Today"),
         StorageEntry(id: "instagram", name: "Instagram", icon: .app(bundleID: "com.burbn.instagram", symbol: "camera.circle.fill", tint: "E1306C"), bytes: gb(2.41), lastUsed: "Today"),
@@ -123,7 +127,7 @@ enum MockStorageCatalog {
                      icon: .multi([("camera.circle.fill", "E1306C"), ("phone.fill", "25D366")]), bytes: kb(33)),
         StorageEntry(id: "cluster", name: "",
                      icon: .multi([("camera.circle.fill", "E1306C"), ("gearshape.fill", "8E8E93"), ("phone.fill", "25D366"), ("photo.fill", "FF9500")]), bytes: kb(20))
-    ]
+    ] }
 
     static func photosRow(gb value: Double) -> StorageEntry {
         StorageEntry(id: photosID, name: "Photos",
@@ -171,7 +175,8 @@ struct DeviceStorageView: View {
                 ?? .app(bundleID: app.bundleID, symbol: "app.fill", tint: "8E8E93")
             entries.append(StorageEntry(id: app.bundleID, name: app.name, icon: icon,
                                         bytes: app.bundleID == MockStorageCatalog.photosID ? photosBytes : app.bytes,
-                                        lastUsed: app.lastUsed))
+                                        lastUsed: app.lastUsed,
+                                        version: app.version, bundleID: app.bundleID))
         }
 
         if store.useRealApps, let installed = InstalledAppsReader.visibleApps {
@@ -184,7 +189,8 @@ struct DeviceStorageView: View {
                     bytes: app.bundleID == MockStorageCatalog.photosID
                         ? photosBytes
                         : InstalledAppsReader.mockBytes(for: app.bundleID),
-                    lastUsed: InstalledAppsReader.mockLastUsed(for: app.bundleID)
+                    lastUsed: InstalledAppsReader.mockLastUsed(for: app.bundleID),
+                    bundleID: app.bundleID
                 ))
             }
         }
@@ -559,9 +565,23 @@ struct AppStorageDetailView: View {
                     StorageIconView(icon: entry.icon)
                         .scaleEffect(2)
                         .frame(width: 58, height: 58)
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 3) {
                         Text(entry.name).font(.title3.weight(.semibold))
-                        Text(MockStorageCatalog.format(entry.bytes)).foregroundStyle(.secondary)
+                        if let version = entry.version, !version.isEmpty {
+                            Text("Version \(version)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        if let bundleID = entry.bundleID, !bundleID.isEmpty {
+                            Text(bundleID)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        Text(MockStorageCatalog.format(entry.bytes))
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 1)
                     }
                 }
                 .padding(.vertical, 4)
