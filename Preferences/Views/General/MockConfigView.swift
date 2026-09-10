@@ -514,7 +514,9 @@ struct StorageAppEditorView: View {
     @State private var appsStore = StorageAppsStore.shared
     @State private var name = ""
     @State private var version = ""
-    @State private var gigabytes = 0.0
+    @State private var publisher = ""
+    @State private var appGB = 0.0
+    @State private var dataGB = 0.0
     @State private var loaded = false
 
     private var app: CustomStorageApp? {
@@ -529,24 +531,22 @@ struct StorageAppEditorView: View {
                 TextField("Version", text: $version)
                     .keyboardType(.numbersAndPunctuation)
                     .autocorrectionDisabled()
+                TextField("Seller", text: $publisher)
+                    .autocorrectionDisabled()
             } header: {
                 Text("App").textCase(nil)
             } footer: {
-                Text("Both are shown in General → Storage: the name in the list, the version in small type under it when the app is opened.")
+                Text("Opening the app in General → Storage shows the name, then the version and the seller underneath.")
             }
 
             Section {
-                LabeledContent("Size") {
-                    HStack(spacing: 4) {
-                        TextField("0", value: $gigabytes, format: .number.precision(.fractionLength(0...2)))
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .frame(maxWidth: 100)
-                        Text("GB").foregroundStyle(.secondary)
-                    }
-                }
+                sizeField("App Size", value: $appGB)
+                sizeField("Documents & Data", value: $dataGB)
+                LabeledContent("Total", value: MockStorageCatalog.format(Int64((appGB + dataGB) * 1_000_000_000)))
+            } header: {
+                Text("Storage").textCase(nil)
             } footer: {
-                Text("Counts towards the Applications total in the storage bar.")
+                Text("The total is what the Storage list shows and counts towards Applications in the storage bar.")
             }
 
             Section {
@@ -564,13 +564,35 @@ struct StorageAppEditorView: View {
             guard !loaded, let app else { return }
             name = app.name
             version = app.version ?? ""
-            gigabytes = Double(app.bytes) / 1_000_000_000
+            publisher = app.publisher ?? ""
+            let appBytes = min(app.bytes, app.appBytes ?? Int64(Double(app.bytes) * 0.35))
+            appGB = Double(appBytes) / 1_000_000_000
+            dataGB = Double(app.bytes - appBytes) / 1_000_000_000
             loaded = true
         }
         .onChange(of: name) { appsStore.setName(name, for: bundleID) }
         .onChange(of: version) { appsStore.setVersion(version, for: bundleID) }
-        .onChange(of: gigabytes) {
-            appsStore.setBytes(Int64(gigabytes * 1_000_000_000), for: bundleID)
+        .onChange(of: publisher) { appsStore.setPublisher(publisher, for: bundleID) }
+        .onChange(of: appGB) { saveSizes() }
+        .onChange(of: dataGB) { saveSizes() }
+    }
+
+    private func saveSizes() {
+        guard loaded else { return }
+        appsStore.setSizes(appBytes: Int64(appGB * 1_000_000_000),
+                           dataBytes: Int64(dataGB * 1_000_000_000),
+                           for: bundleID)
+    }
+
+    private func sizeField(_ title: String, value: Binding<Double>) -> some View {
+        LabeledContent(title) {
+            HStack(spacing: 4) {
+                TextField("0", value: value, format: .number.precision(.fractionLength(0...2)))
+                    .keyboardType(.decimalPad)
+                    .multilineTextAlignment(.trailing)
+                    .frame(maxWidth: 100)
+                Text("GB").foregroundStyle(.secondary)
+            }
         }
     }
 }

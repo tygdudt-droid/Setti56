@@ -60,10 +60,13 @@ struct StorageEntry: Identifiable {
     var bytes: Int64
     var lastUsed: String? = nil
     var offloaded = false
-    /// Shown in small type under the app name in the detail pane, the way
-    /// Settings prints an app's version and bundle identifier.
+    /// The two lines under the app name in the detail pane: `1.0.57`, then
+    /// the seller, `Activision Publishing, Inc.`
     var version: String? = nil
-    var bundleID: String? = nil
+    var publisher: String? = nil
+    /// App Size; the rest of `bytes` is Documents & Data. `nil` falls back to
+    /// a typical split.
+    var appBytes: Int64? = nil
 
     /// Last-used rank for sorting (Today first, never-used last).
     var lastUsedRank: Int {
@@ -100,8 +103,8 @@ enum MockStorageCatalog {
     /// Only pass a bundle ID for apps that are really installed: the private
     /// icon lookup returns a blank template (not nil) for unknown bundles.
     static var apps: [StorageEntry] { [
-        StorageEntry(id: "telegram", name: "Telegram", icon: .app(bundleID: "ph.telegra.Telegraph", symbol: "paperplane.fill", tint: "2AABEE"), bytes: gb(40.24), lastUsed: "Today", version: "12.1.1", bundleID: "ph.telegra.Telegraph"),
-        StorageEntry(id: "cod", name: "Call of Duty", icon: .app(bundleID: "com.activision.callofduty.shooter", symbol: "scope", tint: "1C1C1E"), bytes: gb(29.63), lastUsed: "Today", version: AppRelease.stored.version, bundleID: "com.activision.callofduty.shooter"),
+        StorageEntry(id: "telegram", name: "Telegram", icon: .app(bundleID: "ph.telegra.Telegraph", symbol: "paperplane.fill", tint: "2AABEE"), bytes: gb(40.24), lastUsed: "Today", version: "12.1.1", publisher: "Telegram FZ-LLC"),
+        StorageEntry(id: "cod", name: "Call of Duty", icon: .app(bundleID: "com.activision.callofduty.shooter", symbol: "scope", tint: "1C1C1E"), bytes: gb(30.58), lastUsed: "Today", version: AppRelease.stored.version, publisher: "Activision Publishing, Inc.", appBytes: gb(3.04)),
         StorageEntry(id: "inshot", name: "InShot", icon: .app(bundleID: nil, symbol: "camera.fill", tint: "FF2D55"), bytes: gb(10.76), lastUsed: "Today"),
         StorageEntry(id: "spotify", name: "Spotify", icon: .app(bundleID: nil, symbol: "music.note", tint: "1DB954"), bytes: gb(4.62), lastUsed: "Today"),
         StorageEntry(id: "instagram", name: "Instagram", icon: .app(bundleID: "com.burbn.instagram", symbol: "camera.circle.fill", tint: "E1306C"), bytes: gb(2.41), lastUsed: "Today"),
@@ -176,7 +179,8 @@ struct DeviceStorageView: View {
             entries.append(StorageEntry(id: app.bundleID, name: app.name, icon: icon,
                                         bytes: app.bundleID == MockStorageCatalog.photosID ? photosBytes : app.bytes,
                                         lastUsed: app.lastUsed,
-                                        version: app.version, bundleID: app.bundleID))
+                                        version: app.version, publisher: app.publisher,
+                                        appBytes: app.appBytes))
         }
 
         if store.useRealApps, let installed = InstalledAppsReader.visibleApps {
@@ -189,8 +193,7 @@ struct DeviceStorageView: View {
                     bytes: app.bundleID == MockStorageCatalog.photosID
                         ? photosBytes
                         : InstalledAppsReader.mockBytes(for: app.bundleID),
-                    lastUsed: InstalledAppsReader.mockLastUsed(for: app.bundleID),
-                    bundleID: app.bundleID
+                    lastUsed: InstalledAppsReader.mockLastUsed(for: app.bundleID)
                 ))
             }
         }
@@ -555,53 +558,81 @@ struct AppStorageDetailView: View {
     let entry: StorageEntry
     @State private var confirmDelete = false
 
-    private var appSize: Int64 { Int64(Double(entry.bytes) * 0.35) }
-    private var dataSize: Int64 { entry.bytes - appSize }
+    private var deviceName: String { UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone" }
+
+    private var appSize: Int64 { min(entry.bytes, entry.appBytes ?? Int64(Double(entry.bytes) * 0.35)) }
+    private var dataSize: Int64 { max(0, entry.bytes - appSize) }
 
     var body: some View {
         CustomList(title: entry.name, topPadding: true) {
+            // Icon, then name / version / seller — the version is printed bare
+            // ("1.0.57"), exactly as Settings does.
             Section {
                 HStack(spacing: 14) {
-                    StorageIconView(icon: entry.icon)
-                        .scaleEffect(2)
-                        .frame(width: 58, height: 58)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(entry.name).font(.title3.weight(.semibold))
+                    headerIcon
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(entry.name)
                         if let version = entry.version, !version.isEmpty {
-                            Text("Version \(version)")
-                                .font(.caption2)
+                            Text(version)
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
-                        if let bundleID = entry.bundleID, !bundleID.isEmpty {
-                            Text(bundleID)
-                                .font(.caption2)
+                        if let publisher = entry.publisher, !publisher.isEmpty {
+                            Text(publisher)
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
                         }
-                        Text(MockStorageCatalog.format(entry.bytes))
-                            .foregroundStyle(.secondary)
-                            .padding(.top, 1)
                     }
+                    .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, 6)
                 LabeledContent("App Size", value: MockStorageCatalog.format(appSize))
                 LabeledContent("Documents & Data", value: MockStorageCatalog.format(dataSize))
             }
 
             Section {
-                Button(entry.offloaded ? "Reinstall App" : "Offload App") {}
-                Button("Delete App", role: .destructive) { confirmDelete = true }
+                Button {} label: {
+                    Text(entry.offloaded ? "Reinstall App" : "Offload App")
+                        .frame(maxWidth: .infinity)
+                }
             } footer: {
                 Text(entry.offloaded
-                     ? "This app is offloaded. Reinstalling it will restore your data."
-                     : "Offloading frees up storage used by the app, but keeps its documents and data. Reinstalling the app will place back your data if the app is still available in the App Store.")
+                     ? "This app is offloaded. Reinstalling it will place back your data if the app is still available for download."
+                     : "This will free up storage used by the app, but keep its documents and data. Reinstalling the app will place back your data if the app is still available for download.")
+            }
+
+            Section {
+                Button(role: .destructive) {
+                    confirmDelete = true
+                } label: {
+                    Text("Delete App")
+                        .frame(maxWidth: .infinity)
+                }
+            } footer: {
+                Text("This will delete the app and all related data from this \(deviceName). This action can’t be undone.")
             }
         }
         .confirmationDialog("Delete “\(entry.name)”?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete App", role: .destructive) {}
         } message: {
             Text("Deleting this app will also delete its documents and data.")
+        }
+    }
+
+    /// App Store artwork is drawn at full size rather than scaled up from the
+    /// list icon, so it stays sharp.
+    @ViewBuilder
+    private var headerIcon: some View {
+        if case .custom(let image) = entry.icon {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 50, height: 50)
+                .clipShape(RoundedRectangle(cornerRadius: 11.25, style: .continuous))
+        } else {
+            StorageIconView(icon: entry.icon)
+                .scaleEffect(50.0 / 29.0)
+                .frame(width: 50, height: 50)
         }
     }
 }

@@ -466,6 +466,11 @@ struct CustomStorageApp: Codable, Identifiable, Hashable {
     var lastUsed: String?
     /// Shown under the app name in Storage, e.g. `1.0.57`.
     var version: String?
+    /// The seller line under the version, e.g. `Activision Publishing, Inc.`
+    var publisher: String?
+    /// The App Size row. `bytes` stays the total the list shows, so
+    /// Documents & Data is `bytes - appBytes`.
+    var appBytes: Int64?
     var id: String { bundleID }
 }
 
@@ -476,6 +481,7 @@ struct AppStoreResult: Identifiable, Hashable {
     let artworkURL: URL
     let bytes: Int64
     let version: String?
+    let publisher: String?
     var id: String { bundleID }
 }
 
@@ -534,7 +540,8 @@ enum AppStoreLookup {
             if let text = item["fileSizeBytes"] as? String, let value = Int64(text) { bytes = value }
             else if let value = item["fileSizeBytes"] as? Int64 { bytes = value }
             return AppStoreResult(bundleID: bundleID, name: name, artworkURL: artworkURL,
-                                  bytes: bytes, version: item["version"] as? String)
+                                  bytes: bytes, version: item["version"] as? String,
+                                  publisher: (item["sellerName"] as? String) ?? (item["artistName"] as? String))
         }
     }
 }
@@ -593,11 +600,14 @@ final class StorageAppsStore {
                                    name: result.name,
                                    bytes: result.bytes > 0 ? result.bytes : InstalledAppsReader.mockBytes(for: result.bundleID),
                                    lastUsed: InstalledAppsReader.mockLastUsed(for: result.bundleID),
-                                   version: result.version)
+                                   version: result.version,
+                                   publisher: result.publisher)
         if let index = customApps.firstIndex(where: { $0.bundleID == app.bundleID }) {
-            // Adding an app that is already listed refreshes its icon but
-            // leaves whatever was typed in the editor alone.
+            // Adding an app that is already listed refreshes its icon and fills
+            // in details it never had, but leaves whatever was typed alone.
             customApps[index].lastUsed = app.lastUsed
+            if customApps[index].publisher == nil { customApps[index].publisher = app.publisher }
+            if customApps[index].version == nil { customApps[index].version = app.version }
         } else {
             customApps.append(app)
         }
@@ -631,6 +641,23 @@ final class StorageAppsStore {
         guard let index = customApps.firstIndex(where: { $0.bundleID == bundleID }) else { return }
         let trimmed = version.trimmingCharacters(in: .whitespaces)
         customApps[index].version = trimmed.isEmpty ? nil : trimmed
+        persistApps()
+    }
+
+    func setPublisher(_ publisher: String, for bundleID: String) {
+        guard let index = customApps.firstIndex(where: { $0.bundleID == bundleID }) else { return }
+        let trimmed = publisher.trimmingCharacters(in: .whitespaces)
+        customApps[index].publisher = trimmed.isEmpty ? nil : trimmed
+        persistApps()
+    }
+
+    /// Sets the App Size and Documents & Data rows; the list shows their sum.
+    func setSizes(appBytes: Int64, dataBytes: Int64, for bundleID: String) {
+        guard let index = customApps.firstIndex(where: { $0.bundleID == bundleID }) else { return }
+        let app = max(0, appBytes)
+        let data = max(0, dataBytes)
+        customApps[index].appBytes = app
+        customApps[index].bytes = app + data
         persistApps()
     }
 
